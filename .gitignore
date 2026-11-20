@@ -31,3 +31,10 @@ item/Unity/Assets/Generated.meta
 item/built/
 server/bundles/
 __pycache__/
+# client
+client/Unity/Library/
+client/Unity/Temp/
+client/Unity/Logs/
+client/Unity/UserSettings/
+client/Unity/obj/
+client/build/out/
