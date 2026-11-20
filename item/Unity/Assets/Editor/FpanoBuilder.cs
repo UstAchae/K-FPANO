@@ -1,0 +1,128 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using EFT.Visual;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Rendering;
+// Builds one bundle per colour from what item/prepare.py wrote to Assets/Source/<colour>. The prefab copies the
+// GPNVG-18's layout and components (nvg_l3_gpnvg-18_anvis): root with LODGroup, Dress, NightVisionDevice,
+// CurveRotator, NightVisionMount and PreviewPivot; the Base plate on the root; the flip hinge "axis" carrying the
+// mount's arm and the device node nvg_fpano_LOD0 (with its figure-8 eyepiece glass and the thermal lens marker), and
+// the face light.
+// Run: -executeMethod FpanoBuilder.Build
+public static class FpanoBuilder {
+ const string Src="Assets/Source",Gen="Assets/Generated";
+ static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
+ public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
+ [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;}
+ [Serializable] public class Info {public string colour;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
+
+ const float RotationSpeed=0.75187969f;  // the GPNVG-18's
+ static AnimationCurve Curve(){
+  var c=new AnimationCurve(
+   new Keyframe(0f,0f,2.1630912f,2.1630912f,0.33333334f,0.33333334f),
+   new Keyframe(0.46189547f,0.99912202f,2.1630912f,0.0016316094f,0.33333334f,0.33333334f),
+   new Keyframe(1f,1f,0.0016316094f,0.0016316094f,0.33333334f,0.33333334f));
+  c.preWrapMode=WrapMode.ClampForever;c.postWrapMode=WrapMode.ClampForever;return c;
+ }
+
+ static Vector3 V(float[] a)=>new Vector3(a[0],a[1],a[2]);
+ static Quaternion Q(float[] a)=>new Quaternion(a[0],a[1],a[2],a[3]);
+ static Vector3[] R3(BinaryReader r,int n){var a=new Vector3[n];for(int i=0;i<n;i++)a[i]=new Vector3(r.ReadSingle(),r.ReadSingle(),r.ReadSingle());return a;}
+ static Vector2[] R2(BinaryReader r,int n){var a=new Vector2[n];for(int i=0;i<n;i++)a[i]=new Vector2(r.ReadSingle(),r.ReadSingle());return a;}
+ static Mesh ReadMesh(string path,string name,string gen){
+  var mesh=new Mesh{name=name,indexFormat=IndexFormat.UInt32};
+  using(var r=new BinaryReader(File.OpenRead(path))){
+   int n=r.ReadInt32();r.ReadInt32();int s=r.ReadInt32();
+   mesh.vertices=R3(r,n);mesh.normals=R3(r,n);mesh.uv=R2(r,n);mesh.subMeshCount=s;
+   for(int i=0;i<s;i++){var a=new int[r.ReadInt32()];for(int j=0;j<a.Length;j++)a[j]=r.ReadInt32();mesh.SetTriangles(a,i,true);}
+   if(r.BaseStream.Position!=r.BaseStream.Length)throw new Exception("Unread mesh bytes in "+path);
+  }
+  mesh.RecalculateTangents();mesh.RecalculateBounds();mesh.UploadMeshData(false);
+  AssetDatabase.CreateAsset(mesh,gen+"/mesh_"+name+".asset");return mesh;
+ }
+ static Texture2D Import(string path,TextureImporterType type,bool srgb){
+  var im=(TextureImporter)AssetImporter.GetAtPath(path);
+  im.textureType=type;im.sRGBTexture=srgb;im.mipmapEnabled=true;im.wrapMode=TextureWrapMode.Repeat;im.anisoLevel=4;im.maxTextureSize=2048;im.SaveAndReimport();
+  return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+ }
+ // Placeholder shader with the p0 shader's texture slots; finalize.py points the materials at the game's shader.
+ static Shader StubShader(){
+  string p=Gen+"/FpanoStub.shader";
+  File.WriteAllText(p,"Shader \"UstAchae/FPANO/Stub\" { Properties { _MainTex (\"m\", 2D) = \"white\" {} _SpecMap (\"s\", 2D) = \"white\" {} _BumpMap (\"b\", 2D) = \"bump\" {} _Color (\"c\", Color) = (1,1,1,1) } SubShader { Pass { Color (1,1,1,1) } } }");
+  AssetDatabase.ImportAsset(p,ImportAssetOptions.ForceSynchronousImport);return AssetDatabase.LoadAssetAtPath<Shader>(p);
+ }
+ public static string BundleKey(string colour)=>"ustachae_fpano/fpano_"+colour+".bundle";
+
+ public static void Build(){
+  PlayerSettings.colorSpace=ColorSpace.Linear;
+  if(AssetDatabase.IsValidFolder(Gen))AssetDatabase.DeleteAsset(Gen);
+  Directory.CreateDirectory(Gen);Directory.CreateDirectory(Out);AssetDatabase.Refresh();
+  var stub=StubShader();
+  var builds=Directory.GetDirectories(Src).Select(d=>BuildOne(Path.GetFileName(d),stub)).ToArray();
+  AssetDatabase.SaveAssets();
+  if(BuildPipeline.BuildAssetBundles(Out,builds,BuildAssetBundleOptions.ChunkBasedCompression|BuildAssetBundleOptions.StrictMode,BuildTarget.StandaloneWindows64)==null)throw new Exception("Build failed");
+  Debug.Log("FPANO_BUILD_SUCCESS "+string.Join(",",builds.Select(b=>b.assetBundleName)));
+ }
+
+ // Material names carry the role for finalize.py: _body (the goggle's atlas) and _mount (the mount's).
+ static Material Mat(string src,string gen,string name,string atlas,Shader stub){
+  var m=new Material(stub){name=name+"_"+atlas};
+  m.SetTexture("_MainTex",Import(src+"/albedo_"+atlas+".png",TextureImporterType.Default,true));
+  m.SetTexture("_SpecMap",Import(src+"/spec_"+atlas+".png",TextureImporterType.Default,false));
+  m.SetTexture("_BumpMap",Import(src+"/normal_"+atlas+".png",TextureImporterType.NormalMap,false));
+  AssetDatabase.CreateAsset(m,gen+"/mat_"+atlas+".asset");return m;
+ }
+
+ static AssetBundleBuild BuildOne(string colour,Shader stub){
+  string src=Src+"/"+colour,gen=Gen+"/"+colour;Directory.CreateDirectory(gen);AssetDatabase.Refresh();
+  var info=JsonUtility.FromJson<Info>(File.ReadAllText(src+"/info.json"));
+  string name="nvg_fpano_"+colour;
+  var glass=new Material(stub){name=name+"_glass"};AssetDatabase.CreateAsset(glass,gen+"/mat_glass.asset");  // no maps: finalize.py makes it the game's dark glass
+  var mats=new Dictionary<string,Material>{{"body",Mat(src,gen,name,"body",stub)},{"mount",Mat(src,gen,name,"mount",stub)},{"glass",glass}};
+
+  var root=new GameObject(name);
+  var made=new Dictionary<string,Transform>();
+  var renderers=new List<Renderer>();
+  foreach(var n in info.nodes){
+   var go=new GameObject(n.name);go.transform.SetParent(n.parent==""?root.transform:made[n.parent],false);
+   go.transform.localPosition=V(n.pos);go.transform.localRotation=Q(n.rot);made[n.name]=go.transform;
+   if(n.mesh!=""){
+    var mesh=ReadMesh(src+"/"+n.mesh+".bin",n.mesh,gen);
+    go.AddComponent<MeshFilter>().sharedMesh=mesh;
+    var r=go.AddComponent<MeshRenderer>();r.sharedMaterial=mats[n.mat];r.shadowCastingMode=n.mat=="glass"?ShadowCastingMode.Off:ShadowCastingMode.On;r.receiveShadows=true;renderers.Add(r);
+    var box=go.AddComponent<BoxCollider>();box.center=mesh.bounds.center;box.size=mesh.bounds.size;box.enabled=false;  // disabled like native items
+   }
+  }
+  var lod=made[DeviceNode];var axis=made["axis"];
+  var on=Q(info.onRotation);var off=Q(info.offRotation);
+  if(Quaternion.Angle(axis.localRotation,on)>0.01f)throw new Exception("axis rest rotation is not OnRotation");
+
+  // Thermal objective: centre of its window, +Z out of the front (the device looks along -Y), +Y toward the mount.
+  var lens=new GameObject(ThermalLens);lens.transform.SetParent(lod,false);
+  lens.transform.localPosition=V(info.thermalLens);
+  lens.transform.localRotation=Quaternion.LookRotation(Vector3.down,Vector3.forward);
+
+  // Face light, as the GPNVG-18's "Point light" (off; the game switches it).
+  var lightGo=new GameObject("Point light");lightGo.transform.SetParent(lod,false);
+  lightGo.transform.localPosition=new Vector3(0.0004f,0.0516f,-0.075f);lightGo.transform.localRotation=new Quaternion(0.479f,0,0,0.878f);
+  var light=lightGo.AddComponent<Light>();light.type=LightType.Point;light.color=new Color(0.28275859f,1f,0f);light.intensity=3.14f;light.range=0.05f;light.enabled=false;
+
+  var all=renderers.ToArray();
+  var lodGroup=root.AddComponent<LODGroup>();lodGroup.SetLODs(new[]{new LOD(0.02f,all)});lodGroup.size=0.5f;
+  var dress=root.AddComponent<Dress>();dress.DecalTextureType=1;dress.Renderers=all;
+  root.AddComponent<NightVisionDevice>().Set(light);
+  var rot=root.AddComponent<CurveRotator>();rot.RotatedTransform=axis;rot.RotationSpeed=RotationSpeed;rot.OffRotation=off;rot.OnRotation=on;rot.AnimationCurve=Curve();
+  root.AddComponent<NightVisionMount>().Set(rot);
+  var b=all[0].bounds;foreach(var r in all)b.Encapsulate(r.bounds);
+
+  var pivot=root.AddComponent<PreviewPivot>();
+  pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
+  pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(-0.049385615f,-0.94817758f,-0.25407037f,0.1843058f),boundsScale=1.8080130f,perspective=15,orthographicSize=10};
+
+  string prefab=gen+"/"+name+".prefab";PrefabUtility.SaveAsPrefabAsset(root,prefab);UnityEngine.Object.DestroyImmediate(root);
+  return new AssetBundleBuild{assetBundleName=BundleKey(colour),assetNames=new[]{prefab}};
+ }
+}

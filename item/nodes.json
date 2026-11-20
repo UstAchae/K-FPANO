@@ -1,0 +1,128 @@
+{
+ "nodes": [
+  {
+   "name": "nvg_fpano_mount_LOD0",
+   "parent": "",
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rot": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "mesh": "nvg_fpano_mount_LOD0",
+   "mat": "mount"
+  },
+  {
+   "name": "axis",
+   "parent": "",
+   "pos": [
+    0.0008999289940828434,
+    -0.0019420176293288008,
+    0.016617122678748514
+   ],
+   "rot": [
+    -0.5446028554460587,
+    0.0,
+    0.0,
+    0.838694062122774
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_arm",
+   "parent": "axis",
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rot": [
+    -0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "mesh": "fpano_arm",
+   "mat": "mount"
+  },
+  {
+   "name": "nvg_fpano_LOD0",
+   "parent": "axis",
+   "pos": [
+    0.0,
+    -0.029719999641368795,
+    -0.016359999802583822
+   ],
+   "rot": [
+    -0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "mesh": "nvg_fpano_LOD0",
+   "mat": "body"
+  },
+  {
+   "name": "nvg_fpano_glass_LOD0",
+   "parent": "nvg_fpano_LOD0",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "nvg_fpano_glass_LOD0",
+   "mat": "glass"
+  }
+ ],
+ "thermalLens": [
+  0.012,
+  -0.045399999999999996,
+  -0.04400000000000004
+ ],
+ "eyepieceDiscs (device frame, the glass faces +Y)": {
+  "right_inner": {
+   "centre": [
+    0.025,
+    0.034,
+    -0.0757
+   ],
+   "radius": 0.0135
+  },
+  "right_outer": {
+   "centre": [
+    0.042,
+    0.034,
+    -0.0757
+   ],
+   "radius": 0.0135
+  },
+  "left_inner": {
+   "centre": [
+    -0.025,
+    0.034,
+    -0.0757
+   ],
+   "radius": 0.0135
+  },
+  "left_outer": {
+   "centre": [
+    -0.042,
+    0.034,
+    -0.0757
+   ],
+   "radius": 0.0135
+  }
+ }
+}

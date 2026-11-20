@@ -1,0 +1,18 @@
+{
+  "manifest": [
+    {
+      "key": "ustachae_fpano/fpano_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/fpano_blk.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    }
+  ]
+}

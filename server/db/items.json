@@ -1,0 +1,49 @@
+{
+ "clone": "5c0558060db834001b735271",
+ "handbookParentId": "5b5f749986f774094242f199",
+ "price": 260000,
+ "items": [
+  {
+   "id": "6a4f9a400000000000000001",
+   "name": "nvg_fpano_fde",
+   "bundle": "ustachae_fpano/fpano_fde.bundle",
+   "assortId": "6a4f9a400000000000000101",
+   "locales": {
+    "en": {
+     "name": "L3Harris F-PANO fused panoramic night vision goggles (FDE)",
+     "shortName": "F-PANO",
+     "description": "Fused Panoramic Night Vision Goggle: the four-tube, 97 degree panoramic goggle with a thermal channel added. Four white phosphor image intensifier tubes; a small thermal camera above the right inner tube lays its picture over that tube's image."
+    },
+    "ch": {
+     "name": "L3Harris F-PANO 融合全景夜视仪（沙色）",
+     "shortName": "F-PANO",
+     "description": "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。"
+    }
+   }
+  },
+  {
+   "id": "6a4f9a400000000000000002",
+   "name": "nvg_fpano_blk",
+   "bundle": "ustachae_fpano/fpano_blk.bundle",
+   "assortId": "6a4f9a400000000000000102",
+   "locales": {
+    "en": {
+     "name": "L3Harris F-PANO fused panoramic night vision goggles (Black)",
+     "shortName": "F-PANO",
+     "description": "Fused Panoramic Night Vision Goggle: the four-tube, 97 degree panoramic goggle with a thermal channel added. Four white phosphor image intensifier tubes; a small thermal camera above the right inner tube lays its picture over that tube's image."
+    },
+    "ch": {
+     "name": "L3Harris F-PANO 融合全景夜视仪（黑色）",
+     "shortName": "F-PANO",
+     "description": "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。"
+    }
+   }
+  }
+ ],
+ "listing": {
+  "traderId": "5935c25fb3acc3127c3d8cd9",
+  "currency": "5696686a4bdc2da3298b456a",
+  "price": 2600,
+  "loyalty": 4
+ }
+}

@@ -1,0 +1,33 @@
+﻿# Purchased model sources: never commit (3DMA licence: no redistribution of the source model)
+*.zip
+*.rar
+*.fbx
+*.glb
+*.obj
+*.blend
+*.blend1
+*.max
+*.dae
+*.usdc
+*.abc
+*.tbscene
+item/src/
+item/textures/
+# Unity
+item/Unity/Library/
+item/Unity/Temp/
+item/Unity/Logs/
+item/Unity/obj/
+item/Unity/UserSettings/
+# Build output
+**/bin/
+**/obj/
+*.log
+dump/
+item/Unity/Assets/Source/
+item/Unity/Assets/Source.meta
+item/Unity/Assets/Generated/
+item/Unity/Assets/Generated.meta
+item/built/
+server/bundles/
+__pycache__/
