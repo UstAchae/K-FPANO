@@ -95,20 +95,219 @@ internal static class FpanoRailink
         return _headsets;
     }
 
-    // the rails' headset slot node placed for the headset in it (none, or one not in the table: as the prefab has it)
-    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset)
+    // the rails' headset slot node placed for the headset in it: the table's pose is relative to the helmet model's root
+    // (the cups on the ears as on the headset's own helmet); none, one not in the table, or the rails on no helmet: as
+    // the prefab has it
+    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset, Transform? helmetRoot)
     {
         Remember(node);
         string id = headset != null ? headset.TemplateId.ToString() : "";
-        if (id.Length > 0 && Headsets().TryGetValue(id, out Pose p))
+        bool placed = false;
+        if (helmetRoot != null && id.Length > 0 && Headsets().TryGetValue(id, out Pose p))
         {
-            node.localPosition = p.P;
-            node.localRotation = p.R;
+            node.SetPositionAndRotation(helmetRoot.TransformPoint(p.P), helmetRoot.rotation * p.R);
+            placed = true;
         }
         else
             Restore(node);
-        if (id.Length > 0 && _logged.Add("headset/" + id))
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: headset " + id + " on the rails, " + (Headsets().ContainsKey(id) ? "at its own place" : "not in the table: at the prefab's place"));
+        if (helmetRoot != null && id.Length > 0 && _logged.Add("headset/" + id))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: headset " + id + " on the rails, " + (placed ? "at its own place on the helmet" : "not in the table: at the prefab's place"));
+    }
+
+    // ---- the helmet's own rails, taken off while the RAILINK is on (item/railink_hide.json, by the helmet's shape) ----
+    // Each entry: a renderer of the helmet (by name), the mesh it shows (by name, with its triangle count), and the
+    // triangles to drop, numbered over the mesh's submeshes in turn. The renderer gets a copy without them (made once per
+    // mesh), the helmet is held at LOD0 (the indices are LOD0's), and all goes back when the rails come off. The game's
+    // own swap of a helmet's mesh (CustomItem, for a face cover) is followed: the cut laid again on what it shows.
+    private struct Hide { public string Renderer, Mesh; public int Triangles; public int[] Drop; }
+    private static Dictionary<string, List<Hide>>? _hides;
+    private static Dictionary<string, List<Hide>> Hides()
+    {
+        if (_hides != null)
+            return _hides;
+        _hides = new Dictionary<string, List<Hide>>();
+        try
+        {
+            using Stream? s = typeof(FpanoRailink).Assembly.GetManifestResourceStream("railink_hide.json");
+            if (s == null)
+            {
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: the hide table is missing from the DLL");
+                return _hides;
+            }
+            using var reader = new StreamReader(s);
+            foreach (var shape in Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd()).Properties())
+            {
+                var list = new List<Hide>();
+                foreach (var e in shape.Value)
+                {
+                    var drop = e["drop"];
+                    if (drop == null)
+                        continue;
+                    var idx = new int[((Newtonsoft.Json.Linq.JArray)drop).Count];
+                    int n = 0;
+                    foreach (var d in drop)
+                        idx[n++] = (int)d;
+                    list.Add(new Hide { Renderer = (string?)e["renderer"] ?? "", Mesh = (string?)e["mesh"] ?? "", Triangles = (int?)e["triangles"] ?? -1, Drop = idx });
+                }
+                _hides[shape.Name] = list;
+            }
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: reading the hide table failed: " + e.Message);
+        }
+        return _hides;
+    }
+
+    private const string CutSuffix = " (RAILINK on)";
+    private static readonly Dictionary<int, Mesh?> _cuts = new Dictionary<int, Mesh?>();
+    // a copy of the mesh without the dropped triangles of every entry for it (null: the mesh is not as the table says)
+    private static Mesh? CutOf(Mesh src, List<Hide> entries, string rendererName)
+    {
+        if (_cuts.TryGetValue(src.GetInstanceID(), out Mesh? made))
+            return made;
+        Mesh? cut = null;
+        try
+        {
+            var drop = new HashSet<int>();
+            int expected = -1;
+            foreach (Hide h in entries)
+                if (h.Renderer == rendererName && h.Mesh == src.name)
+                {
+                    expected = h.Triangles;
+                    foreach (int i in h.Drop)
+                        drop.Add(i);
+                }
+            int total = 0;
+            for (int s = 0; s < src.subMeshCount; s++)
+                total += (int)src.GetIndexCount(s) / 3;
+            if (drop.Count == 0 || total != expected || !src.isReadable)
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: mesh " + src.name + " has " + total + " triangles" + (src.isReadable ? "" : ", not readable") + ", the table says " + expected + ": its rails left on");
+            else
+            {
+                cut = Object.Instantiate(src);
+                cut.name = src.name + CutSuffix;
+                int at = 0, dropped = 0;
+                var keep = new List<int>();
+                for (int s = 0; s < src.subMeshCount; s++)
+                {
+                    int[] tris = src.GetTriangles(s);
+                    keep.Clear();
+                    for (int t = 0; t < tris.Length / 3; t++, at++)
+                    {
+                        if (drop.Contains(at)) { dropped++; continue; }
+                        keep.Add(tris[3 * t]); keep.Add(tris[3 * t + 1]); keep.Add(tris[3 * t + 2]);
+                    }
+                    cut.SetTriangles(keep, s, false);
+                }
+                cut.UploadMeshData(true);
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: " + src.name + ": " + dropped + " of " + total + " triangles (its own rails) taken off");
+            }
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: cutting " + src.name + " failed: " + e.Message);
+            cut = null;
+        }
+        _cuts[src.GetInstanceID()] = cut;
+        return cut;
+    }
+
+    private sealed class Railed { public string Shape = ""; public readonly List<KeyValuePair<MeshFilter, Mesh>> Originals = new List<KeyValuePair<MeshFilter, Mesh>>(); public LODGroup? Lod; }
+    private static readonly Dictionary<int, Railed> _railed = new Dictionary<int, Railed>();
+    private static readonly List<MeshFilter> _filters = new List<MeshFilter>();
+
+    private static string ShapeOf(EFT.InventoryLogic.Item helmet)
+    {
+        string path = helmet.Template?.Prefab.path ?? "";
+        string[] parts = path.Split('/');
+        return parts.Length >= 2 ? parts[parts.Length - 2] : "";
+    }
+
+    // the helmet model with the RAILINK on: its own rails cut away, held at LOD0
+    private static void Rail(Transform helmetRoot, string shape, Transform? rails)
+    {
+        if (shape.Length == 0 || !Hides().TryGetValue(shape, out List<Hide> entries))
+            return;
+        int key = helmetRoot.GetInstanceID();
+        if (!_railed.TryGetValue(key, out Railed? railed))
+            _railed[key] = railed = new Railed { Shape = shape };
+        helmetRoot.GetComponentsInChildren(true, _filters);
+        foreach (MeshFilter mf in _filters)
+        {
+            Mesh? shown = mf.sharedMesh;
+            if (shown == null || shown.name.EndsWith(CutSuffix, System.StringComparison.Ordinal) || (rails != null && mf.transform.IsChildOf(rails)))
+                continue;
+            string name = mf.gameObject.name;
+            bool listed = false;
+            foreach (Hide h in entries)
+                if (h.Renderer == name && h.Mesh == shown.name) { listed = true; break; }
+            if (!listed)
+                continue;
+            Mesh? cut = CutOf(shown, entries, name);
+            if (cut == null)
+                continue;
+            railed.Originals.RemoveAll(kv => kv.Key == mf);
+            railed.Originals.Add(new KeyValuePair<MeshFilter, Mesh>(mf, shown));
+            mf.sharedMesh = cut;
+        }
+        _filters.Clear();
+        if (railed.Lod == null)
+        {
+            railed.Lod = helmetRoot.GetComponent<LODGroup>();
+            railed.Lod?.ForceLOD(0);
+        }
+        if (_logged.Add("railed/" + shape))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: helmet " + shape + ": " + railed.Originals.Count + " mesh(es) without their own rails, " + (railed.Lod != null ? "held at LOD0" : "no LODGroup"));
+    }
+
+    // the rails off that helmet model (or it made anew): its meshes and LODs back
+    private static void Unrail(Transform helmetRoot)
+    {
+        int key = helmetRoot.GetInstanceID();
+        if (!_railed.TryGetValue(key, out Railed? railed))
+            return;
+        _railed.Remove(key);
+        foreach (var kv in railed.Originals)
+            if (kv.Key != null && kv.Key.sharedMesh != null && kv.Key.sharedMesh.name.EndsWith(CutSuffix, System.StringComparison.Ordinal))
+                kv.Key.sharedMesh = kv.Value;
+        railed.Lod?.ForceLOD(-1);
+    }
+
+    private static Transform? HelmetRootOf(Transform? t)
+    {
+        for (int i = 0; i < 24 && t != null; i++, t = t.parent)
+            if (t.GetComponent<EFT.AssetsManager.AssetPoolObject>() != null)
+                return t;
+        return null;
+    }
+
+    // the game swapped the helmet's mesh (base / custom): the cut laid again on the one it shows
+    private static void AfterSetIsCustom(CustomItem __instance)
+    {
+        try
+        {
+            if (_railed.Count == 0 || __instance == null)
+                return;
+            Transform? root = HelmetRootOf(__instance.transform);
+            if (root != null && _railed.TryGetValue(root.GetInstanceID(), out Railed? railed))
+                Rail(root, railed.Shape, null);
+        }
+        catch (System.Exception) { }
+    }
+
+    // the rails taken out of a helmet's slot: that helmet's own rails back
+    private static void BeforeRemove(ContainerCollectionView.SlotView __instance)
+    {
+        try
+        {
+            if (_railed.Count == 0 || __instance?.Item == null || !IsRails(__instance.Item) || __instance.Bone == null)
+                return;
+            Transform? root = HelmetRootOf(__instance.Bone);
+            if (root != null)
+                Unrail(root);
+        }
+        catch (System.Exception) { }
     }
 
     private static Vector3 Vec(Newtonsoft.Json.Linq.JToken? v) =>
@@ -149,6 +348,12 @@ internal static class FpanoRailink
         var attach = HarmonyLib.AccessTools.Method(typeof(EFT.ObjectsFactory), "AttachMods");
         if (attach != null)
             try { harmony.Patch(attach, prefix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(BeforeAttach))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: AttachMods not hooked: " + e.Message); }
+        var remove = HarmonyLib.AccessTools.Method(typeof(ContainerCollectionView.SlotView), nameof(ContainerCollectionView.SlotView.RemoveItem));
+        if (remove != null)
+            try { harmony.Patch(remove, prefix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(BeforeRemove))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: RemoveItem not hooked: " + e.Message); }
+        var custom = HarmonyLib.AccessTools.Method(typeof(CustomItem), nameof(CustomItem.SetIsCustom));
+        if (custom != null)
+            try { harmony.Patch(custom, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterSetIsCustom))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: SetIsCustom not hooked: " + e.Message); }
         var post = new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterMade));
         foreach (string name in new[] { "CreateItem", "CreateLootPrefab", "CreateCleanLootPrefab" })
             foreach (var m in typeof(EFT.ObjectsFactory).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static))
@@ -170,6 +375,9 @@ internal static class FpanoRailink
         {
             if (__0 is not EFT.InventoryLogic.CompoundItem compound || compound.Slots == null || __1 == null || __1.GameObject == null)
                 return;
+            // a helmet model made anew (from the pool): its own rails back until the RAILINK is placed on it again
+            if (_railed.Count > 0)
+                Unrail(__1.GameObject.transform);
             foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
             {
                 if (slot == null || !string.Equals(slot.ID, RailsSlot, System.StringComparison.OrdinalIgnoreCase))
@@ -199,7 +407,7 @@ internal static class FpanoRailink
                 // a headset into the rails' headset slot: that slot's node to the headset's own place
                 var into = item.Parent?.Container;
                 if (into != null && into.ID == "mod_equipment" && IsRails(into.ParentItem) && __instance.Bone != null)
-                    PlaceHeadset(__instance.Bone, item);
+                    PlaceHeadset(__instance.Bone, item, HelmetRootOf(RailsRootAbove(__instance.Bone)?.parent));
                 return;
             }
             EFT.InventoryLogic.Item? rails = RailsAbove(item);
@@ -259,15 +467,6 @@ internal static class FpanoRailink
         return null;
     }
 
-    // the helmet's own mod_nvg: in the nearest model above the rails (the one with its AssetPoolObject)
-    private static Transform? HelmetNvg(Transform rails)
-    {
-        Transform? t = rails.parent;
-        for (int i = 0; i < 16 && t != null; i++, t = t.parent)
-            if (t.GetComponent<EFT.AssetsManager.AssetPoolObject>() != null)
-                return Deep(t, "mod_nvg", rails);
-        return null;
-    }
 
     private struct Pose { public Vector3 P; public Quaternion R; public Vector3 S; }
     private static readonly Dictionary<int, Pose> _prefab = new Dictionary<int, Pose>();
@@ -294,19 +493,10 @@ internal static class FpanoRailink
         Transform? railsNvg = rails.Find("mod_nvg");
         if (group != null) Remember(group);
         if (railsNvg != null) Remember(railsNvg);
-        Transform? headsetNode = group != null ? group.Find("mod_equipment") : null;
-        if (headsetNode != null)
-        {
-            EFT.InventoryLogic.Item? headset = null;
-            if (railsItem is EFT.InventoryLogic.CompoundItem withSlots && withSlots.Slots != null)
-                foreach (EFT.InventoryLogic.Slot slot in withSlots.Slots)
-                    if (slot != null && slot.ID == "mod_equipment")
-                        headset = slot.ContainedItem;
-            PlaceHeadset(headsetNode, headset);
-        }
         EFT.InventoryLogic.Item? helmet = railsItem.Parent?.Container?.ParentItem;
         string helmetId = helmet != null ? helmet.TemplateId.ToString() : "";
-        Transform? helmetNvg = helmet != null ? HelmetNvg(rails) : null;
+        Transform? helmetRoot = helmet != null ? HelmetRootOf(rails.parent) : null;
+        Transform? helmetNvg = helmetRoot != null ? Deep(helmetRoot, "mod_nvg", rails) : null;
         bool known = false;
         Fit fit = default;
         if (helmetNvg != null)
@@ -346,6 +536,20 @@ internal static class FpanoRailink
             }
             _parts.Clear();
         }
+        // the headset (its node under the group: placed after it)
+        Transform? headsetNode = group != null ? group.Find("mod_equipment") : null;
+        if (headsetNode != null)
+        {
+            EFT.InventoryLogic.Item? headset = null;
+            if (railsItem is EFT.InventoryLogic.CompoundItem withSlots && withSlots.Slots != null)
+                foreach (EFT.InventoryLogic.Slot slot in withSlots.Slots)
+                    if (slot != null && slot.ID == "mod_equipment")
+                        headset = slot.ContainedItem;
+            PlaceHeadset(headsetNode, headset, helmetNvg != null ? helmetRoot : null);
+        }
+        // the helmet's own rails off
+        if (helmetRoot != null && helmet != null && helmetNvg != null)
+            Rail(helmetRoot, ShapeOf(helmet), rails);
         Transform? socket = group != null ? group.Find("fpano_railink_L/fpano_power_socket") : null;
         int cables = Cables(rails, socket);
         string key = (helmetNvg != null ? helmetId : "-") + "/" + rails.name + "/" + cables;
