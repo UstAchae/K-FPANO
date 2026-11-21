@@ -64,7 +64,8 @@ def finalize_material(o, t, glass):
 
 
 manifest = []
-KEYS = [(f'ustachae_fpano/fpano_{c}.bundle', {'body', 'mount', 'glass', 'rails', 'inside', 'battery'}) for c in COLOURS]
+ROLES = {'rails': {'rails', 'inside'}, 'battery': {'battery'}, 'mount': {'mount'}, 'goggle': {'body', 'glass'}}
+KEYS = [(f'ustachae_fpano/{item}_{c}.bundle', roles) for c in COLOURS for item, roles in ROLES.items()]
 for key, expected in KEYS:
     built = env.load_file((ITEM / 'built' / key).read_bytes(), name=key)
     done = set()

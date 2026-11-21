@@ -20,6 +20,8 @@ files = {SERVER / 'src/bin/Release/UstAchae.Fpano.dll': DEST / 'UstAchae.Fpano.d
          SERVER / 'bundles.json': DEST / 'bundles.json'}
 for b in (SERVER / 'bundles').rglob('*.bundle'):
     files[b] = DEST / 'bundles' / b.relative_to(SERVER / 'bundles')
+for old in (DEST / 'bundles').rglob('*.bundle') if (DEST / 'bundles').exists() else []:
+    if old not in files.values(): old.unlink(); print('removed', old.relative_to(GAME))   # bundles of an earlier layout
 for src, dst in files.items():
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)

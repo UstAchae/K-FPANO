@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.1.11");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.0");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -29,117 +29,181 @@ public record ModMetadata : IModMetadata
     public string License { get; init; } = "All rights reserved";
 }
 
-// The F-PANO items (one per colour, db/items.json) are the GPNVG-18's template with their own bundle and white
-// phosphor, and go everywhere the GPNVG-18 goes (helmet and mount slots, conflicts). The GPNVG-18's own panoramic
-// mask is kept: the F-PANO is the same four-tube, 97 degree goggle with a thermal channel added.
-// Runs after the database and other content mods, so modded helmets and mounts that take the GPNVG-18 take these too.
+// Four items per colour (db/items.json), at the user's design:
+//   rails   the Ops-Core RAILINK powered rails. They take the helmet's headset slot (the one that holds the Ops-Core RAC
+//           or the EXFIL ComTac headsets) or, on NVG helmets without one, a new slot (newHelmetSlot). Their own slots:
+//           mod_equipment (those helmet headsets), mod_battery, mod_mount_000 / 001 (the two Ops-Core ARC rail
+//           adapters, so every helmet light), mod_nvg (only the F-PANO mount). They conflict with every other NVG
+//           and NVG mount, so a helmet with them takes no other night vision;
+//   battery the RAILINK Battery Pack+;
+//   mount   the F-PANO mount (a Norotos TATM clone), only in the rails' mod_nvg: no RAILINK, no F-PANO;
+//   goggle  the F-PANO (a GPNVG-18 clone), only in the F-PANO mount.
 [Injectable(InjectionType.Transient, TypePriority = OnLoadOrder.Preload + 50000)]
 public class FpanoMod(
     ISptLogger<FpanoMod> logger, ModHelper modHelper, CustomItemService customItemService,
-    TemplateTable templateTable, TradersTable tradersTable
+    TemplateTable templateTable, TradersTable tradersTable, LocaleTable localeTable
 ) : IOnLoad
 {
+    const string Head = "5a341c4086f77401f2541505", SlotProto = "55d30c4c4bdc2db4468b457e";
+    int _slotCounter;
+    string _slotPrefix = "";
+
     public Task OnLoadAsync(CancellationToken cancellationToken)
     {
         string modPath = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
         var options = JsonUtil.JsonSerializerOptionsNoIndent ?? new JsonSerializerOptions();
         var db = JsonNode.Parse(File.ReadAllText(System.IO.Path.Combine(modPath, "db", "items.json")))!.AsObject();
-        var clone = new MongoId(db["clone"]!.GetValue<string>());
-        if (!templateTable.Items.TryGetValue(clone, out var source))
-        {
-            logger.Error("F-PANO not loaded: the GPNVG-18 template it is cloned from is missing");
-            return Task.CompletedTask;
-        }
-        string sourceJson = JsonSerializer.Serialize(source, options);
-        var added = new List<MongoId>();
-        foreach (var entry in db["items"]!.AsArray())
-        {
-            var e = entry!.AsObject();
-            string bundle = e["bundle"]!.GetValue<string>();
-            if (!File.Exists(System.IO.Path.Combine(modPath, "bundles", bundle)))
+        _slotPrefix = db["slotIds"]!.GetValue<string>();
+        var kinds = db["kinds"]!.AsObject(); var colours = db["colours"]!.AsObject();
+        var gpnvg = new MongoId(db["gpnvg"]!.GetValue<string>());
+
+        foreach (var (key, names) in db["slotLocales"]!.AsObject())
+            foreach (var (lang, table) in localeTable.Global)
             {
-                logger.Error($"F-PANO {e["name"]} not loaded: bundles/{bundle} is missing from {modPath}. Reinstall the mod.");
-                continue;
+                string label = names![lang]?.GetValue<string>() ?? names["en"]!.GetValue<string>();
+                table.AddTransformer(d => { if (d is not null) d[key] = label; return d; });
             }
-            var node = JsonNode.Parse(sourceJson)!.AsObject();
-            node["_id"] = e["id"]!.GetValue<string>();
-            node["_name"] = e["name"]!.GetValue<string>();
+
+        var entries = db["items"]!.AsArray().Select(e => e!.AsObject()).ToList();
+        var made = new Dictionary<string, List<MongoId>>();
+        foreach (var e in entries)
+        {
+            string kind = e["kind"]!.GetValue<string>();
+            if (!made.ContainsKey(kind)) made[kind] = [];
+            made[kind].Add(new MongoId(e["id"]!.GetValue<string>()));
+        }
+        JsonArray Ids(IEnumerable<MongoId> ids) { var a = new JsonArray(); foreach (var i in ids) a.Add(i.ToString()); return a; }
+        JsonArray Strs(JsonNode? n) { var a = new JsonArray(); foreach (var x in n!.AsArray()) a.Add(x!.GetValue<string>()); return a; }
+
+        // Every NVG and NVG mount that some item's mod_nvg takes, ours left out: the rails conflict with them all.
+        var ours = made.Values.SelectMany(v => v).ToHashSet();
+        var otherNvgs = new HashSet<MongoId>();
+        foreach (var it in templateTable.Items.Values)
+            foreach (var s in it.Properties?.Slots ?? [])
+                if (s.Name == "mod_nvg")
+                    foreach (var f in s.Properties?.Filters ?? [])
+                        foreach (var fid in f.Filter ?? []) if (!ours.Contains(fid)) otherNvgs.Add(fid);
+
+        int created = 0;
+        foreach (var e in entries)
+        {
+            string kind = e["kind"]!.GetValue<string>(), colour = e["colour"]!.GetValue<string>(), bundle = e["bundle"]!.GetValue<string>();
+            var k = kinds[kind]!.AsObject(); var id = e["id"]!.GetValue<string>();
+            if (!File.Exists(System.IO.Path.Combine(modPath, "bundles", bundle))) { logger.Error($"F-PANO {kind} {colour}: bundles/{bundle} is missing. Reinstall the mod."); continue; }
+            if (!templateTable.Items.TryGetValue(new MongoId(k["clone"]!.GetValue<string>()), out var source)) { logger.Error($"F-PANO {kind}: clone template missing"); continue; }
+            var node = JsonNode.Parse(JsonSerializer.Serialize(source, options))!.AsObject();
+            node["_id"] = id; node["_name"] = $"fpano_{kind}_{colour}";
             var props = node["_props"]!.AsObject();
             props["Prefab"] = new JsonObject { ["path"] = bundle, ["rcid"] = "" };
-            // White phosphor, the same blue-white as the K-ENVG-B goggle (measured from the look the user picked).
-            props["Color"] = new JsonObject { ["r"] = 156, ["g"] = 217, ["b"] = 255, ["a"] = 254 };
-            props["Intensity"] = 1.4;
-            if (Create(node, e, options, db["handbookParentId"]!.GetValue<string>(), db["price"]!.GetValue<double>()) is not MongoId made) continue;
-            AddListing(made, new MongoId(e["assortId"]!.GetValue<string>()), db["listing"]!.AsObject());
-            added.Add(made);
+            if (k["weight"] is { } w) props["Weight"] = w.GetValue<double>();
+            if (k["width"] is { } wd) { props["Width"] = wd.GetValue<int>(); props["Height"] = k["height"]!.GetValue<int>(); }
+            props["ConflictingItems"] = new JsonArray();
+            var slots = new JsonArray();
+            JsonObject Slot(string name, JsonArray filter) => new()
+            {
+                ["_id"] = NextSlotId(), ["_name"] = name, ["_parent"] = id,
+                ["_props"] = new JsonObject { ["filters"] = new JsonArray(new JsonObject { ["Shift"] = 0, ["Filter"] = filter }) },
+                ["_required"] = false, ["_mergeSlotWithChildren"] = false, ["_proto"] = SlotProto
+            };
+            switch (kind)
+            {
+                case "rails":
+                    slots.Add(Slot("mod_equipment", Strs(db["railHeadsets"])));
+                    slots.Add(Slot("mod_battery", Ids(made["battery"])));
+                    slots.Add(Slot("mod_mount_000", Strs(db["railAdapters"])));
+                    slots.Add(Slot("mod_mount_001", Strs(db["railAdapters"])));
+                    slots.Add(Slot("mod_nvg", Ids(made["mount"])));
+                    props["ConflictingItems"] = Ids(otherNvgs);
+                    break;
+                case "mount":
+                    slots.Add(Slot("mod_nvg", Ids(made["goggle"])));
+                    break;
+                case "goggle":
+                    // White phosphor, the same blue-white as the K-ENVG-B goggle (measured from the look the user picked).
+                    props["Color"] = new JsonObject { ["r"] = 156, ["g"] = 217, ["b"] = 255, ["a"] = 254 };
+                    props["Intensity"] = 1.4;
+                    break;
+            }
+            props["Slots"] = slots;
+            var loc = new JsonObject();
+            foreach (var (lang, v) in k["locales"]!.AsObject())
+            {
+                var a = v!.AsArray(); string c = colours[colour]![lang]?.GetValue<string>() ?? colours[colour]!["en"]!.GetValue<string>();
+                loc[lang] = new JsonObject { ["name"] = $"{a[0]!.GetValue<string>()} ({c})", ["shortName"] = a[1]!.GetValue<string>(), ["description"] = a[2]!.GetValue<string>() };
+            }
+            if (Create(node, loc, options, k["handbook"]!.GetValue<string>(), k["price"]!.GetValue<double>(), id) is not MongoId newId) continue;
+            AddListing(newId, new MongoId(e["assort"]!.GetValue<string>()), db["trader"]!.GetValue<string>(), db["currency"]!.GetValue<string>(),
+                       k["usd"]!.GetValue<double>(), k["loyalty"]!.GetValue<int>());
+            created++;
         }
-        int slots = GoWhereItGoes(clone, added);
-        if (added.Count > 0) logger.Success($"F-PANO loaded: {added.Count} colours, fits {slots} slots");
+
+        // Conflicts both ways: every other NVG and mount conflicts with the rails.
+        foreach (var nv in otherNvgs)
+            if (templateTable.Items.TryGetValue(nv, out var t) && t.Properties is not null)
+            {
+                t.Properties.ConflictingItems ??= [];
+                foreach (var r in made["rails"]) t.Properties.ConflictingItems.Add(r);
+            }
+
+        // The rails on the helmets: in the slot that holds the helmet headsets, or a new slot on NVG helmets without one.
+        var headsets = db["railHeadsets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
+        string newSlot = db["newHelmetSlot"]!.GetValue<string>();
+        int joined = 0, added = 0;
+        foreach (var it in templateTable.Items.Values)
+        {
+            if (it.Parent != Head || it.Properties?.Slots is not { } hs) continue;
+            bool nvgHelmet = hs.Any(s => s.Name == "mod_nvg" && (s.Properties?.Filters ?? []).Any(f => f.Filter?.Contains(gpnvg) == true));
+            if (!nvgHelmet) continue;
+            var headsetSlot = hs.FirstOrDefault(s => (s.Properties?.Filters ?? []).Any(f => f.Filter?.Any(headsets.Contains) == true));
+            if (headsetSlot is not null)
+            {
+                foreach (var f in headsetSlot.Properties!.Filters!) foreach (var r in made["rails"]) f.Filter!.Add(r);
+                joined++;
+            }
+            else
+            {
+                var s = JsonSerializer.Deserialize<Slot>(new JsonObject
+                {
+                    ["_id"] = NextSlotId(), ["_name"] = newSlot, ["_parent"] = it.Id.ToString(),
+                    ["_props"] = new JsonObject { ["filters"] = new JsonArray(new JsonObject { ["Shift"] = 0, ["Filter"] = Ids(made["rails"]) }) },
+                    ["_required"] = false, ["_mergeSlotWithChildren"] = false, ["_proto"] = SlotProto
+                }, options)!;
+                it.Properties.Slots = hs.Append(s).ToList();
+                added++;
+            }
+        }
+        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them");
         return Task.CompletedTask;
     }
 
-    // Every slot that takes the GPNVG-18 takes the F-PANO; every item that conflicts with it conflicts with these.
-    int GoWhereItGoes(MongoId clone, List<MongoId> added)
-    {
-        int slots = 0;
-        foreach (var item in templateTable.Items.Values)
-        {
-            if (added.Contains(item.Id) || item.Properties is null) continue;
-            foreach (var slot in item.Properties.Slots ?? [])
-                foreach (var f in slot.Properties?.Filters ?? [])
-                    if (f.Filter is not null && f.Filter.Contains(clone))
-                    {
-                        foreach (var id in added) f.Filter.Add(id);
-                        slots++;
-                    }
-            if (item.Properties.ConflictingItems is { } conflicts && conflicts.Contains(clone))
-                foreach (var id in added) conflicts.Add(id);
-        }
-        return slots;
-    }
+    string NextSlotId() => _slotPrefix + (_slotCounter++).ToString("x2");
 
-    MongoId? Create(JsonObject node, JsonObject e, JsonSerializerOptions options, string handbookParent, double price)
+    MongoId? Create(JsonObject node, JsonObject locs, JsonSerializerOptions options, string handbookParent, double price, string id)
     {
-        var template = JsonSerializer.Deserialize<TemplateItem>(node, options)
-            ?? throw new InvalidOperationException($"{e["name"]}: template did not deserialize");
+        var template = JsonSerializer.Deserialize<TemplateItem>(node, options) ?? throw new InvalidOperationException($"{id}: template did not deserialize");
         var locales = new Dictionary<string, LocaleDetails>();
-        foreach (var pair in e["locales"]!.AsObject())
-            locales[pair.Key] = new LocaleDetails
-            {
-                Name = pair.Value!["name"]!.GetValue<string>(),
-                ShortName = pair.Value!["shortName"]!.GetValue<string>(),
-                Description = pair.Value!["description"]!.GetValue<string>()
-            };
+        foreach (var (lang, v) in locs)
+            locales[lang] = new LocaleDetails { Name = v!["name"]!.GetValue<string>(), ShortName = v["shortName"]!.GetValue<string>(), Description = v["description"]!.GetValue<string>() };
         var result = customItemService.CreateItem(new NewItemDetails
         {
             NewItem = template, AddToHandbook = true, HandbookParentId = handbookParent,
             HandbookPriceRoubles = price, FleaPriceRoubles = price, AddToFleaPriceDb = true, Locales = locales
         }, Assembly.GetExecutingAssembly());
         if (result.Success) return template.Id;
-        logger.Error($"F-PANO {e["name"]} was not created: " + string.Join("; ", result.Errors ?? []));
+        logger.Error($"F-PANO {id} was not created: " + string.Join("; ", result.Errors ?? []));
         return null;
     }
 
-    void AddListing(MongoId item, MongoId assortId, JsonObject listing)
+    void AddListing(MongoId item, MongoId assortId, string traderId, string currency, double price, int loyalty)
     {
-        if (!tradersTable.TryGetValue(new MongoId(listing["traderId"]!.GetValue<string>()), out var trader) || trader.Assort is null)
-        {
-            logger.Warning("F-PANO trader missing; item is only on the flea market");
-            return;
-        }
+        if (!tradersTable.TryGetValue(new MongoId(traderId), out var trader) || trader.Assort is null) { logger.Warning("F-PANO trader missing; items are only on the flea market"); return; }
         if (trader.Assort.Items.Any(i => i.Id == assortId)) return;
         trader.Assort.Items.Add(new Item
         {
-            Id = assortId,
-            Template = item,
-            ParentId = "hideout",
-            SlotId = "hideout",
-            Upd = new Upd { UnlimitedCount = true, StackObjectsCount = 999999, BuyRestrictionMax = listing["limit"]?.GetValue<int>() ?? 1, BuyRestrictionCurrent = 0 }
+            Id = assortId, Template = item, ParentId = "hideout", SlotId = "hideout",
+            Upd = new Upd { UnlimitedCount = true, StackObjectsCount = 999999, BuyRestrictionMax = 4, BuyRestrictionCurrent = 0 }
         });
-        trader.Assort.BarterScheme[assortId] =
-        [
-            [new BarterScheme { Count = listing["price"]!.GetValue<double>(), Template = new MongoId(listing["currency"]!.GetValue<string>()) }]
-        ];
-        trader.Assort.LoyalLevelItems[assortId] = listing["loyalty"]!.GetValue<int>();
+        trader.Assort.BarterScheme[assortId] = [[new BarterScheme { Count = price, Template = new MongoId(currency) }]];
+        trader.Assort.LoyalLevelItems[assortId] = loyalty;
     }
 }

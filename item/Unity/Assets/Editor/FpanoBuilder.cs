@@ -17,7 +17,7 @@ public static class FpanoBuilder {
  static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
  public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
  [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin,sideSkin;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;}
- [Serializable] public class Info {public string colour;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
+ [Serializable] public class Info {public string colour,item,root;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
 
  const float RotationSpeed=0.75187969f;  // the GPNVG-18's
  static AnimationCurve Curve(){
@@ -54,14 +54,15 @@ public static class FpanoBuilder {
   File.WriteAllText(p,"Shader \"UstAchae/FPANO/Stub\" { Properties { _MainTex (\"m\", 2D) = \"white\" {} _SpecMap (\"s\", 2D) = \"white\" {} _BumpMap (\"b\", 2D) = \"bump\" {} _Color (\"c\", Color) = (1,1,1,1) } SubShader { Pass { Color (1,1,1,1) } } }");
   AssetDatabase.ImportAsset(p,ImportAssetOptions.ForceSynchronousImport);return AssetDatabase.LoadAssetAtPath<Shader>(p);
  }
- public static string BundleKey(string colour)=>"ustachae_fpano/fpano_"+colour+".bundle";
+ public static readonly string[] Items={"rails","battery","mount","goggle"};
+ public static string BundleKey(string item,string colour)=>"ustachae_fpano/"+item+"_"+colour+".bundle";
 
  public static void Build(){
   PlayerSettings.colorSpace=ColorSpace.Linear;
   if(AssetDatabase.IsValidFolder(Gen))AssetDatabase.DeleteAsset(Gen);
   Directory.CreateDirectory(Gen);Directory.CreateDirectory(Out);AssetDatabase.Refresh();
   var stub=StubShader();
-  var builds=Directory.GetDirectories(Src).Select(d=>BuildOne(Path.GetFileName(d),stub)).ToArray();
+  var builds=Directory.GetDirectories(Src).SelectMany(d=>Items.Select(it=>BuildOne(Path.GetFileName(d),it,stub))).ToArray();
   AssetDatabase.SaveAssets();
   if(BuildPipeline.BuildAssetBundles(Out,builds,BuildAssetBundleOptions.ChunkBasedCompression|BuildAssetBundleOptions.StrictMode,BuildTarget.StandaloneWindows64)==null)throw new Exception("Build failed");
   Debug.Log("FPANO_BUILD_SUCCESS "+string.Join(",",builds.Select(b=>b.assetBundleName)));
@@ -76,13 +77,16 @@ public static class FpanoBuilder {
   AssetDatabase.CreateAsset(m,gen+"/mat_"+atlas+".asset");return m;
  }
 
- static AssetBundleBuild BuildOne(string colour,Shader stub){
-  string src=Src+"/"+colour,gen=Gen+"/"+colour;Directory.CreateDirectory(gen);AssetDatabase.Refresh();
-  var info=JsonUtility.FromJson<Info>(File.ReadAllText(src+"/info.json"));
-  string name="nvg_fpano_"+colour;
-  var glass=new Material(stub){name=name+"_glass"};AssetDatabase.CreateAsset(glass,gen+"/mat_glass.asset");  // no maps: finalize.py makes it the game's dark glass
-  var mats=new Dictionary<string,Material>{{"glass",glass}};
-  foreach(var a in info.atlases)mats[a]=Mat(src,gen,name,a,stub);  // the goggle's, the mount's and the RAILINK's atlases
+ // One of the four items (split_items.py): rails, battery, mount, goggle, from Source/<colour>/info_<item>.json.
+ static AssetBundleBuild BuildOne(string colour,string item,Shader stub){
+  string src=Src+"/"+colour,gen=Gen+"/"+colour+"_"+item;Directory.CreateDirectory(gen);AssetDatabase.Refresh();
+  var info=JsonUtility.FromJson<Info>(File.ReadAllText(src+"/info_"+item+".json"));
+  string name=info.root;
+  var mats=new Dictionary<string,Material>();
+  foreach(var a in info.nodes.Select(n=>n.mat).Where(m=>m!="").Distinct()){
+   if(a=="glass"){var glass=new Material(stub){name=name+"_glass"};AssetDatabase.CreateAsset(glass,gen+"/mat_glass.asset");mats[a]=glass;}  // no maps: finalize.py makes it the game's dark glass
+   else mats[a]=Mat(src,gen,name,a,stub);
+  }
 
   var root=new GameObject(name);
   var made=new Dictionary<string,Transform>();
@@ -124,10 +128,26 @@ public static class FpanoBuilder {
     var box=go.AddComponent<BoxCollider>();box.center=mesh.bounds.center;box.size=mesh.bounds.size;box.enabled=false;  // disabled like native items
    }
   }
-  var lod=made[DeviceNode];var axis=made["axis"];
-  var on=Q(info.onRotation);var off=Q(info.offRotation);
-  if(Quaternion.Angle(axis.localRotation,on)>0.01f)throw new Exception("axis rest rotation is not OnRotation");
+  var all=renderers.ToArray();
+  var lodGroup=root.AddComponent<LODGroup>();lodGroup.SetLODs(new[]{new LOD(0.02f,all)});lodGroup.size=0.5f;
+  var dress=root.AddComponent<Dress>();dress.DecalTextureType=1;dress.Renderers=all;
+  if(item=="mount"){
+   // The flip on the mount, as the Norotos TATM: CurveRotator turns "axis", NightVisionMount on the root.
+   var axis=made["axis"];var on=Q(info.onRotation);var off=Q(info.offRotation);
+   if(Quaternion.Angle(axis.localRotation,on)>0.01f)throw new Exception("axis rest rotation is not OnRotation");
+   var rot=root.AddComponent<CurveRotator>();rot.RotatedTransform=axis;rot.RotationSpeed=RotationSpeed;rot.OffRotation=off;rot.OnRotation=on;rot.AnimationCurve=Curve();
+   root.AddComponent<NightVisionMount>().Set(rot);
+  }
+  if(item=="goggle")Goggle(root,made[DeviceNode],info);
+  var b=all[0].bounds;foreach(var r in all)b.Encapsulate(r.bounds);
+  var pivot=root.AddComponent<PreviewPivot>();
+  pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
+  pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(-0.049385615f,-0.94817758f,-0.25407037f,0.1843058f),boundsScale=1.8080130f,perspective=15,orthographicSize=10};
+  string prefab=gen+"/"+name+".prefab";PrefabUtility.SaveAsPrefabAsset(root,prefab);UnityEngine.Object.DestroyImmediate(root);
+  return new AssetBundleBuild{assetBundleName=BundleKey(item,colour),assetNames=new[]{prefab}};
+ }
 
+ static void Goggle(GameObject root,Transform lod,Info info){
   // Thermal objective: centre of its window, +Z out of the front (the device looks along -Y), +Y toward the mount.
   var lens=new GameObject(ThermalLens);lens.transform.SetParent(lod,false);
   lens.transform.localPosition=V(info.thermalLens);
@@ -138,19 +158,6 @@ public static class FpanoBuilder {
   lightGo.transform.localPosition=new Vector3(0.0004f,0.0516f,-0.075f);lightGo.transform.localRotation=new Quaternion(0.479f,0,0,0.878f);
   var light=lightGo.AddComponent<Light>();light.type=LightType.Point;light.color=new Color(0.28275859f,1f,0f);light.intensity=3.14f;light.range=0.05f;light.enabled=false;
 
-  var all=renderers.ToArray();
-  var lodGroup=root.AddComponent<LODGroup>();lodGroup.SetLODs(new[]{new LOD(0.02f,all)});lodGroup.size=0.5f;
-  var dress=root.AddComponent<Dress>();dress.DecalTextureType=1;dress.Renderers=all;
   root.AddComponent<NightVisionDevice>().Set(light);
-  var rot=root.AddComponent<CurveRotator>();rot.RotatedTransform=axis;rot.RotationSpeed=RotationSpeed;rot.OffRotation=off;rot.OnRotation=on;rot.AnimationCurve=Curve();
-  root.AddComponent<NightVisionMount>().Set(rot);
-  var b=all[0].bounds;foreach(var r in all)b.Encapsulate(r.bounds);
-
-  var pivot=root.AddComponent<PreviewPivot>();
-  pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
-  pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(-0.049385615f,-0.94817758f,-0.25407037f,0.1843058f),boundsScale=1.8080130f,perspective=15,orthographicSize=10};
-
-  string prefab=gen+"/"+name+".prefab";PrefabUtility.SaveAsPrefabAsset(root,prefab);UnityEngine.Object.DestroyImmediate(root);
-  return new AssetBundleBuild{assetBundleName=BundleKey(colour),assetNames=new[]{prefab}};
  }
 }

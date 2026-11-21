@@ -1,14 +1,56 @@
 {
   "manifest": [
     {
-      "key": "ustachae_fpano/fpano_fde.bundle",
+      "key": "ustachae_fpano/rails_fde.bundle",
       "dependencyKeys": [
         "shaders",
         "cubemaps"
       ]
     },
     {
-      "key": "ustachae_fpano/fpano_blk.bundle",
+      "key": "ustachae_fpano/battery_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/mount_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/goggle_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/rails_blk.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/battery_blk.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/mount_blk.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/goggle_blk.bundle",
       "dependencyKeys": [
         "shaders",
         "cubemaps"

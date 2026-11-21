@@ -381,6 +381,8 @@ def main(parts, tex):
         info = {'colour': colour, 'atlases': list(ATLASES), 'thermalLens': lens.tolist(), 'onRotation': list(map(float, q_on)),
                 'offRotation': list(map(float, q_off)), 'nodes': nodes}
         (out / 'info.json').write_text(json.dumps(info, indent=1))
+        from split_items import split
+        print(colour, 'items:', split(out, info))
         if colour == 'fde':
             (ITEM / 'nodes.json').write_text(json.dumps({'nodes': nodes, 'joints': joints, 'thermalLens': lens.tolist(),
                                                           'eyepieceLenses (device frame: centre, facing toward the eye, radius)': discs}, indent=1))
