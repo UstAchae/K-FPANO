@@ -103,4 +103,9 @@ for key, expected in KEYS:
             assert t['m_Shader']['m_FileID'] and o.assets_file.externals[t['m_Shader']['m_FileID'] - 1].path == refs.SHADERS
     print('FPANO_FINALIZE_PASS', key, out.stat().st_size)
 
+# the helmet headsets' meshes on the rails (bake_headsets.py): no materials, copied as built
+HEADSETS = 'ustachae_fpano/railink_headsets.bundle'
+if (ITEM / 'built' / HEADSETS).exists():
+    (OUT / 'bundles' / HEADSETS).write_bytes((ITEM / 'built' / HEADSETS).read_bytes())
+    manifest.append({'key': HEADSETS, 'dependencyKeys': []}); print('FPANO_FINALIZE_PASS', HEADSETS, (OUT / 'bundles' / HEADSETS).stat().st_size)
 (OUT / 'bundles.json').write_text(json.dumps({'manifest': manifest}, indent=2), encoding='utf-8')

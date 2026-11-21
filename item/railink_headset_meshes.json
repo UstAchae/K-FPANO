@@ -1,0 +1,40 @@
+{
+ "66b5f69ea7f72d197e70bcdb": {
+  "mesh": "Item_equipment_headset_comtac_5_LOD0",
+  "helmets": {
+   "5a154d5cfcdbcb001a3b00da": "Item_equipment_headset_comtac_5_LOD0__helmet_opscore_fast_00da",
+   "5ac8d6885acfc400180ae7b0": "Item_equipment_headset_comtac_5_LOD0__helmet_opscore_fast_e7b0",
+   "5c17a7ed2e2216152142459c": "Item_equipment_headset_comtac_5_LOD0__helmet_crye_airframe_459c",
+   "5d5e7d28a4b936645d161203": "Item_equipment_headset_comtac_5_LOD0__helmet_mich2001_1203",
+   "5d5e9c74a4b9364855191c40": "Item_equipment_headset_comtac_5_LOD0__helmet_mich2002_1c40",
+   "5e00c1ad86f774747333222c": "Item_equipment_headset_comtac_5_LOD0__helmet_team_wendy_exfil_222c",
+   "5e01ef6886f77445f643baa4": "Item_equipment_headset_comtac_5_LOD0__helmet_team_wendy_exfil_baa4",
+   "5e4bfc1586f774264f7582d3": "Item_equipment_headset_comtac_5_LOD0__helmet_tc800_82d3",
+   "5ea05cf85ad9772e6624305d": "Item_equipment_headset_comtac_5_LOD0__helmet_hops_core_fast_305d",
+   "5f60b34a41e30a4ab12a6947": "Item_equipment_headset_comtac_5_LOD0__helmet_galvion_caiman_6947",
+   "65719f0775149d62ce0a670b": "Item_equipment_headset_comtac_5_LOD0__helmet_tor_2_670b",
+   "68a9b3ca0a9c4f9398032c46": "Item_equipment_headset_comtac_5_LOD0__helmet_galvion_caiman_2c46",
+   "68a9b5a5863d2a71fa0494a6": "Item_equipment_headset_comtac_5_LOD0__helmet_galvion_caiman_94a6"
+  },
+  "bare": "Item_equipment_headset_comtac_5_LOD0__helmet_team_wendy_exfil_222c"
+ },
+ "66b5f6a28ca68c6461709ed8": {
+  "mesh": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0",
+  "helmets": {
+   "5a154d5cfcdbcb001a3b00da": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_opscore_fast_00da",
+   "5ac8d6885acfc400180ae7b0": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_opscore_fast_e7b0",
+   "5c17a7ed2e2216152142459c": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_crye_airframe_459c",
+   "5d5e7d28a4b936645d161203": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_mich2001_1203",
+   "5d5e9c74a4b9364855191c40": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_mich2002_1c40",
+   "5e00c1ad86f774747333222c": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_team_wendy_exfil_222c",
+   "5e01ef6886f77445f643baa4": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_team_wendy_exfil_baa4",
+   "5e4bfc1586f774264f7582d3": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_tc800_82d3",
+   "5ea05cf85ad9772e6624305d": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_hops_core_fast_305d",
+   "5f60b34a41e30a4ab12a6947": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_galvion_caiman_6947",
+   "65719f0775149d62ce0a670b": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_tor_2_670b",
+   "68a9b3ca0a9c4f9398032c46": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_galvion_caiman_2c46",
+   "68a9b5a5863d2a71fa0494a6": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_galvion_caiman_94a6"
+  },
+  "bare": "Item_equipment_headset_mounts_Comtac_6_exfil_LOD0__helmet_team_wendy_exfil_222c"
+ }
+}

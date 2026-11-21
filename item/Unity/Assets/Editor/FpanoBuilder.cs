@@ -62,10 +62,32 @@ public static class FpanoBuilder {
   if(AssetDatabase.IsValidFolder(Gen))AssetDatabase.DeleteAsset(Gen);
   Directory.CreateDirectory(Gen);Directory.CreateDirectory(Out);AssetDatabase.Refresh();
   var stub=StubShader();
-  var builds=Directory.GetDirectories(Src).SelectMany(d=>Items.Select(it=>BuildOne(Path.GetFileName(d),it,stub))).ToArray();
+  var builds=Directory.GetDirectories(Src).Where(d=>Path.GetFileName(d)!="headsets").SelectMany(d=>Items.Select(it=>BuildOne(Path.GetFileName(d),it,stub))).ToList();
+  if(Directory.Exists(Src+"/headsets"))builds.Add(BuildHeadsets());
   AssetDatabase.SaveAssets();
-  if(BuildPipeline.BuildAssetBundles(Out,builds,BuildAssetBundleOptions.ChunkBasedCompression|BuildAssetBundleOptions.StrictMode,BuildTarget.StandaloneWindows64)==null)throw new Exception("Build failed");
+  if(BuildPipeline.BuildAssetBundles(Out,builds.ToArray(),BuildAssetBundleOptions.ChunkBasedCompression|BuildAssetBundleOptions.StrictMode,BuildTarget.StandaloneWindows64)==null)throw new Exception("Build failed");
   Debug.Log("FPANO_BUILD_SUCCESS "+string.Join(",",builds.Select(b=>b.assetBundleName)));
+ }
+
+ // The helmet headsets as they sit on the RAILINK rails, per rail helmet (bake_headsets.py): whole meshes (positions,
+ // normals, uvs, submeshes) the client swaps in for the game's own, which are not readable at run time. No materials:
+ // the headset's renderers keep the game's.
+ public const string HeadsetsBundle="ustachae_fpano/railink_headsets.bundle";
+ static AssetBundleBuild BuildHeadsets(){
+  string gen=Gen+"/headsets";Directory.CreateDirectory(gen);AssetDatabase.Refresh();var names=new List<string>();
+  foreach(var path in Directory.GetFiles(Src+"/headsets","*.bin").OrderBy(p=>p)){
+   string name=Path.GetFileNameWithoutExtension(path);var mesh=new Mesh{name=name,indexFormat=IndexFormat.UInt32};
+   using(var r=new BinaryReader(File.OpenRead(path))){
+    int n=r.ReadInt32();r.ReadInt32();int subs=r.ReadInt32();
+    mesh.vertices=R3(r,n);mesh.normals=R3(r,n);mesh.uv=R2(r,n);mesh.subMeshCount=subs;
+    for(int i=0;i<subs;i++){var a=new int[r.ReadInt32()];for(int j=0;j<a.Length;j++)a[j]=r.ReadInt32();mesh.SetTriangles(a,i,true);}
+    if(r.BaseStream.Position!=r.BaseStream.Length)throw new Exception("Unread mesh bytes in "+path);
+   }
+   mesh.RecalculateTangents();mesh.RecalculateBounds();mesh.UploadMeshData(false);
+   string asset=gen+"/"+name+".asset";AssetDatabase.CreateAsset(mesh,asset);names.Add(asset);
+  }
+  Debug.Log("FPANO headsets: "+names.Count+" meshes");
+  return new AssetBundleBuild{assetBundleName=HeadsetsBundle,assetNames=names.ToArray()};
  }
 
  // Material names carry the role for finalize.py: _body (the goggle's atlas) and _mount (the mount's).

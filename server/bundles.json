@@ -101,6 +101,10 @@
         "shaders",
         "cubemaps"
       ]
+    },
+    {
+      "key": "ustachae_fpano/railink_headsets.bundle",
+      "dependencyKeys": []
     }
   ]
 }
