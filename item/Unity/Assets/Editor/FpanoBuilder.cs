@@ -103,8 +103,8 @@ public static class FpanoBuilder {
     var bones=n.bones.Select(b=>made[b]).ToArray();
     mesh.boneWeights=bw;mesh.bindposes=bones.Select(b=>b.worldToLocalMatrix*go.transform.localToWorldMatrix).ToArray();EditorUtility.SetDirty(mesh);
     var sr=go.AddComponent<SkinnedMeshRenderer>();sr.sharedMesh=mesh;sr.bones=bones;sr.rootBone=bones[0];sr.sharedMaterial=mats[n.mat];
-    sr.shadowCastingMode=ShadowCastingMode.On;sr.receiveShadows=true;sr.quality=SkinQuality.Bone2;
-    sr.localBounds=new Bounds(mesh.bounds.center,mesh.bounds.size+Vector3.one*0.12f);renderers.Add(sr);
+    sr.shadowCastingMode=ShadowCastingMode.On;sr.receiveShadows=true;sr.quality=SkinQuality.Bone2;sr.updateWhenOffscreen=true;
+    sr.localBounds=new Bounds(mesh.bounds.center,mesh.bounds.size);renderers.Add(sr);
    }
    else if(n.skin){
     // The power cable: skinned to its bones (prefab.py POWER_*), the second bone's weight 1 within weightNear of
@@ -117,9 +117,11 @@ public static class FpanoBuilder {
     mesh.boneWeights=bw;mesh.bindposes=bones.Select(b=>b.worldToLocalMatrix*go.transform.localToWorldMatrix).ToArray();
     EditorUtility.SetDirty(mesh);
     var sr=go.AddComponent<SkinnedMeshRenderer>();sr.sharedMesh=mesh;sr.bones=bones;sr.rootBone=bones[1];sr.sharedMaterial=mats[n.mat];
-    sr.shadowCastingMode=ShadowCastingMode.On;sr.receiveShadows=true;sr.updateWhenOffscreen=false;sr.quality=SkinQuality.Bone2;
-    sr.localBounds=new Bounds(bones[1].InverseTransformPoint(go.transform.TransformPoint(mesh.bounds.center)),mesh.bounds.size+Vector3.one*0.3f);
-    sr.enabled=!n.hidden;renderers.Add(sr);
+    // Its bounds follow its bones (updateWhenOffscreen): no padding, which the game's icons (all active renderers'
+    // bounds) would count. Hidden by an inactive GameObject until the client binds it to the rails' socket.
+    sr.shadowCastingMode=ShadowCastingMode.On;sr.receiveShadows=true;sr.updateWhenOffscreen=true;sr.quality=SkinQuality.Bone2;
+    sr.localBounds=new Bounds(bones[1].InverseTransformPoint(go.transform.TransformPoint(mesh.bounds.center)),mesh.bounds.size);
+    if(n.hidden)go.SetActive(false);renderers.Add(sr);
    }
    else if(n.mesh!=""){
     var mesh=ReadMesh(src+"/"+n.mesh+".bin",n.mesh,gen);
@@ -143,9 +145,10 @@ public static class FpanoBuilder {
   var pivot=root.AddComponent<PreviewPivot>();
   pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
   pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(-0.049385615f,-0.94817758f,-0.25407037f,0.1843058f),boundsScale=1.8080130f,perspective=15,orthographicSize=10};
-  if(item=="goggle"){  // exactly the GPNVG-18's framing (its device sits where the GPNVG-18's does): pivot and LOD reference
+  if(item=="goggle"){  // the GPNVG-18's pivot and LOD reference; the icon framed on the goggle itself (IconFraming)
    pivot.pivotPosition=new Vector3(-0.00038808584f,-0.013348266f,-0.08924666f);
    lodGroup.localReferencePoint=new Vector3(-0.00038808584f,-0.013348244f,-0.089246705f);
+   pivot.Icon=IconFraming.Frame(root,pivot.Icon,r=>r.name.StartsWith(DeviceNode)||r.name.StartsWith("nvg_fpano_glass"),2f);
   }
   if(item=="mount"){  // as the Norotos TATM (a 1x1 mount): its view angles and framing
    pivot.pivotRotation=new Quaternion(0f,1f,0f,-4.371139e-08f);pivot.scale=Vector3.one*1.4285715f;
