@@ -86,8 +86,12 @@ def mesh_of(hid):
         nv = len(h.m_Vertices) if np.ndim(h.m_Vertices) > 1 else len(h.m_Vertices) // 3
         V = np.array(h.m_Vertices, float).reshape(nv, -1)[:, :3]; N = np.array(h.m_Normals, float).reshape(nv, -1)[:, :3]
         V = V @ W[:3, :3].T + W[:3, 3]; N = N @ W[:3, :3].T
+        MESH_NODE[m.m_Name] = W          # the LOD node's place under the root (the ComTac's is turned -90 deg about x)
         return m.m_Name, V, N, np.array(h.m_UV0, float).reshape(nv, -1)[:, :2], [np.array(t, np.int64).reshape(-1, 3) for t in h.get_triangles()]
     raise SystemExit(f'{hid}: no LOD0 mesh')
+
+
+MESH_NODE = {}
 
 
 def islands(V, tris):
@@ -165,7 +169,11 @@ def bake(hid, tpl, mesh, own):
     Qo = Q.copy(); grow = np.maximum(out - r, 0)
     Qo[:, 0] += u[:, 0] * grow; Qo[:, 2] += u[:, 1] * grow; Pn[k] = Qo
     # back to the root's frame at its helmet-root place on this helmet
-    Wi = np.linalg.inv(Wh); L = xf(Wi, Pn); NL = Nn @ Wi[:3, :3].T; NL /= np.linalg.norm(NL, axis=1, keepdims=True)
+    # back to the MESH's own frame: the root at its helmet-root place on this helmet, then the LOD node under it (the
+    # client swaps the mesh on that node; 0.2.31 wrote the root's frame and the node's -90 deg turned it over in game)
+    Wm = Wh @ MESH_NODE[name]; Wi = np.linalg.inv(Wm)
+    L = xf(Wi, Pn); NL = Nn @ Wi[:3, :3].T; NL /= np.linalg.norm(NL, axis=1, keepdims=True)
+    assert np.allclose(xf(Wm, L), Pn, atol=1e-6)                 # root x node x mesh lands where the preview has it
     return L, NL, (Hm, Rl, Pn, tris)
 
 
