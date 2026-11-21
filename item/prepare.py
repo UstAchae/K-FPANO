@@ -28,7 +28,13 @@ PART = 'NVG_L3_Harris_FPGPNVG'
 MPART = 'NVG_Mount_L3Harris_FPGPNVG'
 BODY = [PART, PART + '_Bridge', PART + '_Cable']          # the goggle's atlas (FPGPNVG)
 BASE = [MPART + '_Base']                                    # stays on the helmet (FPG21 atlas)
-ARM = [MPART + 'Frame', MPART + '_Mount_Main']              # flips (FPG21 atlas)
+FRAME = [MPART + 'Frame']                                   # flips on the Base (FPG21 atlas)
+ARM = [MPART + '_Mount_Main']                               # tilts on the Frame's front boss (FPG21 atlas)
+TILT_MODEL = np.array([0.0, -0.17196, 1.79386])             # Mount_Main's origin on the Frame's boss: the tilt pin (FDE)
+# Adjustable mount for K-3PS-C's NightVisionMount (user: "支架可调节"), the K-ENVG-B layout: the Base stays; a
+# carriage (height) slides up the shroud (root +Y) carrying the flip hinge "axis"; the Frame flips with it; the
+# Mount_Main tilts on the Frame's front boss (its own origin, along X); the Bridge and goggle slide fore and aft
+# under it along the optical axis (slide node +Z = away from the face). Travel is K-3PS-C's to choose.
 HINGE_MODEL = np.array([0.0, -0.14438, 1.79386])            # the Frame's origin on the Base: the flip hinge (FDE copy)
 COLOUR_SHIFT = {'fde': 0.0, 'blk': 0.2445}                  # the BLK copy stands 0.2445 m along +X in the model
 # Eyepieces: each side one wide oval opening (inner and outer tube side by side), rearmost rim at y -0.1236; the
@@ -64,7 +70,7 @@ LENS_R = 0.01585
 LENS_CROWN = 0.0012
 LENS_LIFT = 0.0003
 LENS_DARK_UV = (0.16, 0.64)  # a dark grey texel of the model's own pane paint
-ATLASES = {'body': ('NVG_L3Harris_FPGPNVG', BODY), 'mount': ('NVG_Mount_L3Harris_FPG21', BASE + ARM)}
+ATLASES = {'body': ('NVG_L3Harris_FPGPNVG', BODY), 'mount': ('NVG_Mount_L3Harris_FPG21', BASE + FRAME + ARM)}
 
 
 def qmat(q):
@@ -180,13 +186,23 @@ def rig(parts, colour, out):
     Ron = qmat(AXIS_ROT)
     Rdev = Rs @ Ron                                            # the deployed goggle in the root frame
     def seated(p): return (p @ Ron.T + AXIS_POS) @ Rs.T + ts   # device frame -> root frame
-    hinge = seated(to_device(colour, (HINGE_MODEL + [COLOUR_SHIFT[colour], 0, 0])[None]))[0]
+    model = lambda p: seated(to_device(colour, (p + [COLOUR_SHIFT[colour], 0, 0])[None]))[0]
+    hinge, pin = model(HINGE_MODEL), model(TILT_MODEL)
+    away = Rdev @ np.array([0.0, -1.0, 0.0])                   # along the optical axis, away from the face
+    lat = np.array([1.0, 0, 0]); lat = lat - (lat @ away) * away; lat /= np.linalg.norm(lat)
+    Rslide = np.column_stack([lat, np.cross(away, lat), away])
     W = {'nvg_fpano_mount_LOD0': (np.eye(3), np.zeros(3)),
+         'fpano_carriage': (np.eye(3), hinge),
          'axis': (Rdev, hinge),
-         'fpano_arm': (Rdev, hinge),
+         'fpano_frame': (Rdev, hinge),
+         'fpano_tilt': (Rdev, pin),
+         'fpano_arm': (Rdev, pin),
+         'fpano_slide': (Rslide, pin),
          'nvg_fpano_LOD0': (Rdev, seated(np.zeros((1, 3)))[0])}
-    parent = {'nvg_fpano_mount_LOD0': None, 'axis': None, 'fpano_arm': 'axis', 'nvg_fpano_LOD0': 'axis'}
-    meshes = {'nvg_fpano_mount_LOD0': (BASE, 'mount'), 'fpano_arm': (ARM, 'mount'), 'nvg_fpano_LOD0': (BODY, 'body')}
+    parent = {'nvg_fpano_mount_LOD0': None, 'fpano_carriage': None, 'axis': 'fpano_carriage', 'fpano_frame': 'axis',
+              'fpano_tilt': 'fpano_frame', 'fpano_arm': 'fpano_tilt', 'fpano_slide': 'fpano_arm', 'nvg_fpano_LOD0': 'fpano_slide'}
+    meshes = {'nvg_fpano_mount_LOD0': (BASE, 'mount'), 'fpano_frame': (FRAME, 'mount'), 'fpano_arm': (ARM, 'mount'),
+              'nvg_fpano_LOD0': (BODY, 'body')}
     nodes = []
     for name, par in parent.items():
         R, t = W[name]
@@ -204,7 +220,13 @@ def rig(parts, colour, out):
     dq = qmul(GP_OFF, (-GP_ON[0], -GP_ON[1], -GP_ON[2], GP_ON[3]))
     sgn = np.sign((2 * np.arctan2(dq[0], dq[3]) + np.pi) % (2 * np.pi) - np.pi)
     q_off = np.array(qmul(qx(sgn * np.radians(FLIP_DEG)), q_on))
-    return nodes, q_on, q_off
+    root = 'nvg_fpano_mount_LOD0'
+    joints = {'height': {'node': 'fpano_carriage', 'axisInRoot': [0.0, 1.0, 0.0], 'note': 'slides up the shroud; the Base stays'},
+              'flip': {'node': 'fpano_carriage/axis', 'axisLocal': 'X', 'degrees': FLIP_DEG},
+              'tilt': {'node': 'fpano_carriage/axis/fpano_frame/fpano_tilt', 'axisLocal': 'X', 'pivot': "Mount_Main's pin on the Frame's front boss"},
+              'slide': {'node': 'fpano_carriage/axis/fpano_frame/fpano_tilt/fpano_arm/fpano_slide', 'axisLocal': 'Z (away from the face)'},
+              'device': 'fpano_carriage/axis/fpano_frame/fpano_tilt/fpano_arm/fpano_slide/nvg_fpano_LOD0'}
+    return nodes, q_on, q_off, joints
 
 
 def channel(path, size):
@@ -285,7 +307,7 @@ def glass(colour):
 def main(parts, tex):
     for colour in COLOURS:
         out = UNITY / colour; out.mkdir(parents=True, exist_ok=True)
-        nodes, q_on, q_off = rig(parts, colour, out)
+        nodes, q_on, q_off, joints = rig(parts, colour, out)
         (gp, gn, gu), discs = glass(colour)
         write_mesh(out / 'nvg_fpano_glass_LOD0.bin', gp, gn, gu)
         nodes.append({'name': 'nvg_fpano_glass_LOD0', 'parent': 'nvg_fpano_LOD0', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1],
@@ -295,7 +317,7 @@ def main(parts, tex):
                 'offRotation': list(map(float, q_off)), 'nodes': nodes}
         (out / 'info.json').write_text(json.dumps(info, indent=1))
         if colour == 'fde':
-            (ITEM / 'nodes.json').write_text(json.dumps({'nodes': nodes, 'thermalLens': lens.tolist(),
+            (ITEM / 'nodes.json').write_text(json.dumps({'nodes': nodes, 'joints': joints, 'thermalLens': lens.tolist(),
                                                           'eyepieceLenses (device frame: centre, facing toward the eye, radius)': discs}, indent=1))
             print('eyepiece discs', discs)
         print(colour, 'thermal lens at', lens.round(4))

@@ -18,12 +18,29 @@
    "mat": "mount"
   },
   {
-   "name": "axis",
+   "name": "fpano_carriage",
    "parent": "",
    "pos": [
     0.0008999289940828434,
     -0.0019420176293288008,
     0.016617122678748514
+   ],
+   "rot": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "axis",
+   "parent": "fpano_carriage",
+   "pos": [
+    0.0,
+    0.0,
+    0.0
    ],
    "rot": [
     -0.5446028554460587,
@@ -35,8 +52,42 @@
    "mat": ""
   },
   {
-   "name": "fpano_arm",
+   "name": "fpano_frame",
    "parent": "axis",
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rot": [
+    -0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "mesh": "fpano_frame",
+   "mat": "mount"
+  },
+  {
+   "name": "fpano_tilt",
+   "parent": "fpano_frame",
+   "pos": [
+    0.0,
+    -0.027579999667192164,
+    6.938893903907228e-18
+   ],
+   "rot": [
+    -0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_arm",
+   "parent": "fpano_tilt",
    "pos": [
     0.0,
     0.0,
@@ -52,18 +103,35 @@
    "mat": "mount"
   },
   {
-   "name": "nvg_fpano_LOD0",
-   "parent": "axis",
+   "name": "fpano_slide",
+   "parent": "fpano_arm",
    "pos": [
     0.0,
-    -0.029719999641368795,
-    -0.016359999802583822
+    0.0,
+    0.0
    ],
    "rot": [
-    -0.0,
+    0.7071067811865476,
     0.0,
     0.0,
-    1.0
+    0.7071067811865476
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "nvg_fpano_LOD0",
+   "parent": "fpano_slide",
+   "pos": [
+    0.0,
+    -0.01635999980258383,
+    0.00213999997417663
+   ],
+   "rot": [
+    -0.7071067811865476,
+    0.0,
+    0.0,
+    0.7071067811865476
    ],
    "mesh": "nvg_fpano_LOD0",
    "mat": "body"
@@ -86,6 +154,32 @@
    "mat": "glass"
   }
  ],
+ "joints": {
+  "height": {
+   "node": "fpano_carriage",
+   "axisInRoot": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "note": "slides up the shroud; the Base stays"
+  },
+  "flip": {
+   "node": "fpano_carriage/axis",
+   "axisLocal": "X",
+   "degrees": 160.0
+  },
+  "tilt": {
+   "node": "fpano_carriage/axis/fpano_frame/fpano_tilt",
+   "axisLocal": "X",
+   "pivot": "Mount_Main's pin on the Frame's front boss"
+  },
+  "slide": {
+   "node": "fpano_carriage/axis/fpano_frame/fpano_tilt/fpano_arm/fpano_slide",
+   "axisLocal": "Z (away from the face)"
+  },
+  "device": "fpano_carriage/axis/fpano_frame/fpano_tilt/fpano_arm/fpano_slide/nvg_fpano_LOD0"
+ },
  "thermalLens": [
   0.012,
   -0.045399999999999996,
