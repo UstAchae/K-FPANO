@@ -154,8 +154,59 @@
    "mat": ""
   },
   {
-   "name": "fpano_power_socket",
+   "name": "fpano_railink_L",
    "parent": "fpano_railink",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_railink_R",
+   "parent": "fpano_railink",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_railink_back",
+   "parent": "fpano_railink",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_power_socket",
+   "parent": "fpano_railink_L",
    "pos": [
     -0.08390007100591716,
     -0.03526919092207279,
@@ -214,7 +265,15 @@
     1
    ],
    "mesh": "fpano_railink_rails",
-   "mat": "rails"
+   "mat": "rails",
+   "sideSkin": true,
+   "bones": [
+    "fpano_railink_back",
+    "fpano_railink_L",
+    "fpano_railink_R"
+   ],
+   "sideFrom": 0.045,
+   "sideTo": 0.075
   },
   {
    "name": "fpano_railink_inside",
@@ -231,11 +290,19 @@
     1
    ],
    "mesh": "fpano_railink_inside",
-   "mat": "inside"
+   "mat": "inside",
+   "sideSkin": true,
+   "bones": [
+    "fpano_railink_back",
+    "fpano_railink_L",
+    "fpano_railink_R"
+   ],
+   "sideFrom": 0.045,
+   "sideTo": 0.075
   },
   {
    "name": "fpano_railink_battery",
-   "parent": "fpano_railink",
+   "parent": "fpano_railink_back",
    "pos": [
     0,
     0,

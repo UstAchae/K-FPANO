@@ -1,0 +1,110 @@
+{
+ "helmet_opscore_fast": {
+  "ty": 0.0439,
+  "tz": -0.0159,
+  "pitch": 9.53,
+  "s": 0.9925,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.8
+ },
+ "facecover_devtac": {
+  "ty": -0.0948,
+  "tz": 0.0007,
+  "pitch": -16.25,
+  "s": 0.85,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.624
+ },
+ "helmet_crye_airframe": {
+  "ty": 0.0362,
+  "tz": -0.0041,
+  "pitch": 12.5,
+  "s": 0.91,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.728
+ },
+ "helmet_mich2001": {
+  "ty": 0.0269,
+  "tz": -0.0108,
+  "pitch": 3.12,
+  "s": 0.92,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.698
+ },
+ "helmet_mich2002": {
+  "ty": 0.0355,
+  "tz": -0.0085,
+  "pitch": 8.44,
+  "s": 0.925,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.713
+ },
+ "helmet_team_wendy_exfil": {
+  "ty": 0.0212,
+  "tz": -0.0068,
+  "pitch": 12.19,
+  "s": 0.85,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.667
+ },
+ "helmet_tc800": {
+  "ty": 0.031,
+  "tz": 0.0022,
+  "pitch": 11.48,
+  "s": 0.965,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.683
+ },
+ "helmet_hops_core_fast": {
+  "ty": 0.0439,
+  "tz": -0.0159,
+  "pitch": 9.53,
+  "s": 0.9925,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.8
+ },
+ "helmet_galvion_caiman": {
+  "ty": 0.0265,
+  "tz": -0.0283,
+  "pitch": 0.94,
+  "s": 0.915,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.673
+ },
+ "helmet_neosteel": {
+  "ty": 0.0325,
+  "tz": 0.0277,
+  "pitch": 15.0,
+  "s": 1.15,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.597
+ },
+ "helmet_tor_2": {
+  "ty": 0.013,
+  "tz": -0.0043,
+  "pitch": -0.62,
+  "s": 0.85,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.797
+ },
+ "helmet_bastion": {
+  "ty": 0.068,
+  "tz": 0.029,
+  "pitch": 19.38,
+  "s": 1.15,
+  "sx": 1.0,
+  "auto": "profile",
+  "iou": 0.566
+ }
+}
