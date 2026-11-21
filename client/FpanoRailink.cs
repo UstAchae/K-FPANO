@@ -692,8 +692,11 @@ internal static class FpanoRailink
             for (Transform? t = smr.transform; to == null && t != null; t = t.parent)
                 to = t.Find("fpano_power_socket");
             n++;
-            // shown only plugged into the rails (off on its own placeholder: a lone F-PANO's icon not stretched by it)
-            smr.enabled = socket != null && to == socket;
+            // shown only plugged into the rails (its object off on its own placeholder: the icon frames every renderer
+            // under an active object, a disabled one too, so only an inactive object keeps a lone F-PANO's icon tight)
+            bool plugged = socket != null && to == socket;
+            if (smr.gameObject.activeSelf != plugged)
+                smr.gameObject.SetActive(plugged);
             if (to == null || bones[1] == to)
                 continue;
             // (its bounds are laid around bone 1: they move to the new socket with it)
