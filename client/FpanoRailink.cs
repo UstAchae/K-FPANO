@@ -23,6 +23,7 @@ internal static class FpanoRailink
     // the group's place, turn and scale on the helmet, and its two sides' and back's own shifts (fpano_railink_L, _R, _back)
     private struct Fit { public Vector3 Pos; public Quaternion Rot; public Vector3 Scale; public Vector3 Left, Right, Back; }
     private static readonly string[] Parts = { "fpano_railink_L", "fpano_railink_R", "fpano_railink_back" };
+    private static readonly string[] RealSize = { "mod_flashlight_000", "mod_flashlight_001", "mod_tactical_000", "mod_tactical_001", "mod_mount_000", "mod_mount_001" };
     private static Dictionary<string, Fit>? _fits;
 
     private static Dictionary<string, Fit> Fits()
@@ -491,6 +492,8 @@ internal static class FpanoRailink
         {
             if (item == null || itemView == null)
                 return;
+            if (FpanoStrobe.IsStrobe(item))
+                FpanoStrobe.Attach(itemView);
             int kind = Kind(item);
             if (kind == 0)
             {
@@ -529,6 +532,8 @@ internal static class FpanoRailink
         {
             if (__0 == null || __result == null)
                 return;
+            if (FpanoStrobe.IsStrobe(__0))
+                FpanoStrobe.Attach(__result);
             int kind = Kind(__0);
             if (kind == 1)
                 FitRails(__result.transform, __0);
@@ -633,7 +638,15 @@ internal static class FpanoRailink
                 else if (t.name == Parts[2])
                     t.localPosition = known ? fit.Back : Vector3.zero;
                 else
+                {
+                    // the lights' and adapters' slots: the group's fit scale taken off, so what hangs there keeps its size
+                    if (System.Array.IndexOf(RealSize, t.name) >= 0)
+                    {
+                        Vector3 g = group.localScale;
+                        t.localScale = new Vector3(1f / Mathf.Max(g.x, 1e-6f), 1f / Mathf.Max(g.y, 1e-6f), 1f / Mathf.Max(g.z, 1e-6f));
+                    }
                     continue;
+                }
                 t.localRotation = Quaternion.identity;
                 t.localScale = Vector3.one;
             }
