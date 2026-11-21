@@ -70,7 +70,18 @@ LENS_R = 0.01585
 LENS_CROWN = 0.0012
 LENS_LIFT = 0.0003
 LENS_DARK_UV = (0.16, 0.64)  # a dark grey texel of the model's own pane paint
-ATLASES = {'body': ('NVG_L3Harris_FPGPNVG', BODY), 'mount': ('NVG_Mount_L3Harris_FPG21', BASE + FRAME + ARM)}
+# Power (user: "后面应该和 ENVG-B 一样有块电池", then "改用这个" with the 3DMA Ops-Core RAILINK model, and "连导轨一起"):
+# the RAILINK powered rail system for the FAST SF shell (the model's "SHSF" set: rails with their inner parts, and the
+# battery pack on the back); the F-PANO is powered through the rails, as on the real system. 3DMA builds its helmet
+# items in one scene, so the RAILINK parts are placed exactly as the F-PANO's own (to_device with the FDE copy's
+# frame, then the same seat): checked on the helmet, the battery sits on its back and the rails along its sides.
+# They hang on our root and do not flip. The headlamp, light and strobes of the set are left out.
+RAILINK_TEX = Path(r'D:/games/models/RAILINK/extracted/Helmet_OpsCore_RAILINK_v02/Textures/PBR_Helmet_OpsCore_RAILINK_SHSF_tx')
+RAILINK = {'rails': ('Helmet_OpsCore_RAILINK_SHSF_Rail', 0), 'inside': ('Helmet_OpsCore_RAILINK_SHSF_Rail', 1),
+           'battery': ('Helmet_OpsCore_RAILINK_SHSF_Battery', 0)}  # atlas: (part, material slot)
+RAILINK_STEM = {'rails': 'Rails', 'inside': 'Inside', 'battery': 'Battery'}
+ATLASES = {'body': ('NVG_L3Harris_FPGPNVG', BODY), 'mount': ('NVG_Mount_L3Harris_FPG21', BASE + FRAME + ARM),
+           'rails': None, 'inside': None, 'battery': None}
 
 
 def qmat(q):
@@ -216,6 +227,15 @@ def rig(parts, colour, out):
             p, n = seated(p), n @ Rdev.T                       # root frame
             write_mesh(out / f'{name}.bin', (p - t) @ R, n @ R, u); node['mesh'] = name; node['mat'] = mat
         nodes.append(node)
+    # The RAILINK rails and battery, on the root (see RAILINK), in the root frame.
+    for atlas, (part, slot) in RAILINK.items():
+        d = np.load(parts.parent / 'railink' / f'{part}.npz')
+        keep = np.repeat(d['mat'] == slot, 3)
+        p = to_device('fde', d['pos'].astype(np.float64)[keep]); n = mirror(d['nor'].astype(np.float64)[keep]); u = d['uv'][keep]
+        idx = np.arange(len(p)).reshape(-1, 3)[:, [0, 2, 1]].ravel()  # the mirror reverses the winding
+        name = f'fpano_railink_{atlas}'
+        write_mesh(out / f'{name}.bin', seated(p[idx]), n[idx] @ Rdev.T, u[idx])
+        nodes.append({'name': name, 'parent': '', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1], 'mesh': name, 'mat': atlas})
     q_on = mat2quat(Rdev)
     dq = qmul(GP_OFF, (-GP_ON[0], -GP_ON[1], -GP_ON[2], GP_ON[3]))
     sgn = np.sign((2 * np.arctan2(dq[0], dq[3]) + np.pi) % (2 * np.pi) - np.pi)
@@ -233,12 +253,23 @@ def channel(path, size):
     return np.asarray(Image.open(path).convert('L').resize((size, size), Image.LANCZOS)).astype(np.float64) / 255
 
 
+def atlas_files(tex, atlas, colour):
+    """(base colour file, file of a shared map by its kind) of an atlas: the F-PANO's own sets are named by colour
+    (FDE carries the shared maps), the RAILINK's have no colour in the FDE names and "BLK" in the black base colour."""
+    if atlas in RAILINK:
+        stem = f'Helmet_OpsCore_RAILINK_SHSF_{RAILINK_STEM[atlas]}'
+        return RAILINK_TEX / f'{stem}_{"BLK_" if colour == "blk" else ""}BaseColor.png', lambda k: RAILINK_TEX / f'{stem}_{k}.png'
+    stem = ATLASES[atlas][0]
+    return tex / f'{stem}_{colour.upper()}_BaseColor.png', lambda k: tex / f'{stem}_FDE_{k}.png'
+
+
 def textures(tex, colour, out):
-    """Per atlas: the colour's base colour; AO, roughness, metalness and normal are the FDE set's (shared)."""
-    for atlas, (stem, _) in ATLASES.items():
+    """Per atlas: the colour's base colour; AO, roughness, metalness and normal are shared by the colours."""
+    for atlas in ATLASES:
         size = TEX_SIZE if atlas == 'body' else 1024
-        base = np.asarray(Image.open(tex / f'{stem}_{colour.upper()}_BaseColor.png').convert('RGB').resize((size, size), Image.LANCZOS)).astype(np.float64) / 255
-        ao, rough, metal = (channel(tex / f'{stem}_FDE_{k}.png', size) for k in ('AO', 'Roughness', 'Metalness'))
+        base_file, shared = atlas_files(tex, atlas, colour)
+        base = np.asarray(Image.open(base_file).convert('RGB').resize((size, size), Image.LANCZOS)).astype(np.float64) / 255
+        ao, rough, metal = (channel(shared(k), size) for k in ('AO', 'Roughness', 'Metalness'))
         gloss = 1 - rough
         albedo = base * (0.25 + 0.75 * ao[..., None])
         painted = base.max(-1) > 2 / 255
@@ -248,7 +279,7 @@ def textures(tex, colour, out):
         save = lambda name, rgb, alpha=1.0: Image.fromarray((np.clip(np.dstack([rgb, np.broadcast_to(alpha, rgb.shape[:2])]), 0, 1) * 255).astype(np.uint8), 'RGBA').save(out / f'{name}_{atlas}.png')
         save('albedo', albedo, reflect)
         save('spec', np.dstack([spec] * 3))
-        normal = np.asarray(Image.open(tex / f'{stem}_FDE_OpenGL_Normal.png').convert('RGB').resize((size, size), Image.LANCZOS)).astype(np.float64) / 255
+        normal = np.asarray(Image.open(shared('OpenGL_Normal')).convert('RGB').resize((size, size), Image.LANCZOS)).astype(np.float64) / 255
         save('normal', normal)
 
 
@@ -313,7 +344,7 @@ def main(parts, tex):
         nodes.append({'name': 'nvg_fpano_glass_LOD0', 'parent': 'nvg_fpano_LOD0', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1],
                       'mesh': 'nvg_fpano_glass_LOD0', 'mat': 'glass'})
         lens = to_device(colour, (THERMAL_MODEL + [COLOUR_SHIFT[colour], 0, 0])[None])[0]
-        info = {'colour': colour, 'thermalLens': lens.tolist(), 'onRotation': list(map(float, q_on)),
+        info = {'colour': colour, 'atlases': list(ATLASES), 'thermalLens': lens.tolist(), 'onRotation': list(map(float, q_on)),
                 'offRotation': list(map(float, q_off)), 'nodes': nodes}
         (out / 'info.json').write_text(json.dumps(info, indent=1))
         if colour == 'fde':

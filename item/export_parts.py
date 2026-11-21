@@ -22,12 +22,15 @@ for o in bpy.context.scene.objects:
     w = o.matrix_world
     nw = w.to_3x3().inverted().transposed()
     uv = m.uv_layers.active.data
-    pos, nor, tex = [], [], []
+    pos, nor, tex, mat = [], [], [], []
+    names = [s.material.name if s.material else '' for s in o.material_slots]
     for t in m.loop_triangles:
+        mat.append(t.material_index)
         for li in t.loops:
             l = m.loops[li]
             pos.append(tuple(w @ m.vertices[l.vertex_index].co))
             nor.append(tuple((nw @ l.normal).normalized()))
             tex.append(tuple(uv[li].uv))
-    np.savez(out / (o.name + '.npz'), pos=np.array(pos, np.float32), nor=np.array(nor, np.float32), uv=np.array(tex, np.float32))
+    np.savez(out / (o.name + '.npz'), pos=np.array(pos, np.float32), nor=np.array(nor, np.float32), uv=np.array(tex, np.float32),
+             mat=np.array(mat, np.int32), mats=np.array(names))  # each triangle's material slot, and the slots' names
     print('PART', o.name, len(pos) // 3, 'triangles')

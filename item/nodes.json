@@ -137,6 +137,57 @@
    "mat": "body"
   },
   {
+   "name": "fpano_railink_rails",
+   "parent": "",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "fpano_railink_rails",
+   "mat": "rails"
+  },
+  {
+   "name": "fpano_railink_inside",
+   "parent": "",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "fpano_railink_inside",
+   "mat": "inside"
+  },
+  {
+   "name": "fpano_railink_battery",
+   "parent": "",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "fpano_railink_battery",
+   "mat": "battery"
+  },
+  {
    "name": "nvg_fpano_glass_LOD0",
    "parent": "nvg_fpano_LOD0",
    "pos": [

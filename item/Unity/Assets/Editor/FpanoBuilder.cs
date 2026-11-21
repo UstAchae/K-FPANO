@@ -17,7 +17,7 @@ public static class FpanoBuilder {
  static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
  public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
  [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;}
- [Serializable] public class Info {public string colour;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
+ [Serializable] public class Info {public string colour;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
 
  const float RotationSpeed=0.75187969f;  // the GPNVG-18's
  static AnimationCurve Curve(){
@@ -81,7 +81,8 @@ public static class FpanoBuilder {
   var info=JsonUtility.FromJson<Info>(File.ReadAllText(src+"/info.json"));
   string name="nvg_fpano_"+colour;
   var glass=new Material(stub){name=name+"_glass"};AssetDatabase.CreateAsset(glass,gen+"/mat_glass.asset");  // no maps: finalize.py makes it the game's dark glass
-  var mats=new Dictionary<string,Material>{{"body",Mat(src,gen,name,"body",stub)},{"mount",Mat(src,gen,name,"mount",stub)},{"glass",glass}};
+  var mats=new Dictionary<string,Material>{{"glass",glass}};
+  foreach(var a in info.atlases)mats[a]=Mat(src,gen,name,a,stub);  // the goggle's, the mount's and the RAILINK's atlases
 
   var root=new GameObject(name);
   var made=new Dictionary<string,Transform>();
