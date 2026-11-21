@@ -73,6 +73,7 @@ internal static class FpanoRailink
     // the same on rails with no helmet: in the rails' root frame, the rails then fitted as on the headset's own helmet
     private static readonly Dictionary<string, Pose> _onRails = new Dictionary<string, Pose>();
     private static readonly Dictionary<string, string> _onRailsFit = new Dictionary<string, string>();
+    private static readonly Dictionary<string, Pose> _onGroup = new Dictionary<string, Pose>();
     private static Dictionary<string, Pose> Headsets()
     {
         if (_headsets != null)
@@ -104,6 +105,13 @@ internal static class FpanoRailink
                     if (!string.IsNullOrEmpty(fitOf))
                         _onRailsFit[entry.Name] = fitOf!;
                 }
+                // on a helmet: the slot node's pose in fpano_railink's own space (the group's scaled units), so the
+                // headset follows the rails as fitted to that helmet
+                var grouped = entry.Value["onGroup"];
+                var groupedPos = grouped?["pos"];
+                var groupedRot = grouped?["rot"];
+                if (groupedPos != null && groupedRot != null)
+                    _onGroup[entry.Name] = new Pose { P = Vec(groupedPos), R = new Quaternion((float)groupedRot[0]!, (float)groupedRot[1]!, (float)groupedRot[2]!, (float)groupedRot[3]!), S = Vector3.one };
             }
         }
         catch (System.Exception e)
@@ -121,7 +129,16 @@ internal static class FpanoRailink
         Remember(node);
         string id = headset != null ? headset.TemplateId.ToString() : "";
         bool placed = false;
-        if (helmetRoot != null && id.Length > 0 && Headsets().TryGetValue(id, out Pose p))
+        if (helmetRoot != null && id.Length > 0 && Headsets() != null && _onGroup.TryGetValue(id, out Pose g) && node.parent != null)
+        {
+            // with the rails (their place on this helmet), at the rails' own size taken off so the headset keeps its own
+            node.localPosition = g.P;
+            node.localRotation = g.R;
+            Vector3 own = _prefab[node.GetInstanceID()].S, scale = node.parent.localScale;
+            node.localScale = new Vector3(own.x / Mathf.Max(scale.x, 1e-6f), own.y / Mathf.Max(scale.y, 1e-6f), own.z / Mathf.Max(scale.z, 1e-6f));
+            placed = true;
+        }
+        else if (helmetRoot != null && id.Length > 0 && Headsets().TryGetValue(id, out Pose p))
         {
             node.SetPositionAndRotation(helmetRoot.TransformPoint(p.P), helmetRoot.rotation * p.R);
             placed = true;
@@ -130,6 +147,12 @@ internal static class FpanoRailink
         {
             // the rails on no helmet (an icon, loot): the headset where it sits on them, from the rails' root
             node.SetPositionAndRotation(railsRoot.TransformPoint(bare.P), railsRoot.rotation * bare.R);
+            if (node.parent != null)
+            {
+                // (the rails fitted as on that helmet, scaled: the headset keeps its own size)
+                Vector3 own = _prefab[node.GetInstanceID()].S, scale = node.parent.localScale;
+                node.localScale = new Vector3(own.x / Mathf.Max(scale.x, 1e-6f), own.y / Mathf.Max(scale.y, 1e-6f), own.z / Mathf.Max(scale.z, 1e-6f));
+            }
         }
         else
             Restore(node);
