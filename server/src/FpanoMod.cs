@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.36");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.37");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -189,7 +189,16 @@ public class FpanoMod(
                 added++;
             }
         }
-        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them");
+        // Mandibles (Airframe chops, Caiman, NeoSteel) and the helmet headsets no longer conflict (user: "护额类的装备和 RALINK
+        // 的耳机槽位冲突了，把这个冲突取消掉"): no game helmet takes both, so only a headset on the RAILINK meets one; the
+        // RAILINK carries it clear of the mandible. Ear covers and side armour still conflict (they sit where the cups go).
+        var mandibles = db["railMandibles"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
+        int freed = 0;
+        foreach (var (a, others) in new[] { (headsets, mandibles), (mandibles, headsets) })
+            foreach (var id in a)
+                if (templateTable.Items.TryGetValue(id, out var t) && t.Properties?.ConflictingItems is { } c)
+                    foreach (var o in others) if (c.Remove(o)) freed++;
+        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/mandible conflicts lifted");
         return Task.CompletedTask;
     }
 
