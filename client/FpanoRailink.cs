@@ -740,6 +740,13 @@ internal static class FpanoRailink
                     continue;
                 try { harmony.Patch(m, postfix: post); patched++; } catch (System.Exception) { }
             }
+        // (the inventory's icons are made through the async factory, from the pool: a model last worn on the player could
+        // come back with its cable still plugged into those rails, far away, and the icon framed around both)
+        var made = HarmonyLib.AccessTools.Method(typeof(EFT.ObjectsFactory), "CreateItemAsync");
+        if (made != null && made.ReturnType == typeof(System.Threading.Tasks.Task<GameObject>))
+            try { harmony.Patch(made, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterMadeAsync))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: CreateItemAsync not hooked: " + e.Message); }
+        else
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: CreateItemAsync not found: icons keep the pool's state");
         EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: placed as each model is assembled (" + patched + " places hooked)");
     }
 
@@ -818,6 +825,83 @@ internal static class FpanoRailink
         catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: placing failed: " + e.Message); }
     }
 
+    // the same once an async model is ready (only ours are touched)
+    private static void AfterMadeAsync(EFT.InventoryLogic.Item __0, ref System.Threading.Tasks.Task<GameObject> __result)
+    {
+        if (__0 != null && __result != null && Ours(__0))
+            __result = FinishMade(__0, __result);
+    }
+    private static async System.Threading.Tasks.Task<GameObject> FinishMade(EFT.InventoryLogic.Item item, System.Threading.Tasks.Task<GameObject> making)
+    {
+        GameObject model = await making;
+        if (model != null)
+        {
+            AfterMade(item, model);
+            if (_logged.Add("async/" + Kind(item)))
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: async model (icon) of " + item.TemplateId + " set up: " + Framed(model.transform));
+        }
+        return model;
+    }
+
+    // whether this item's model, or one inside it, is one of ours
+    private static bool Ours(EFT.InventoryLogic.Item item)
+    {
+        if (Kind(item) != 0 || FpanoStrobe.IsStrobe(item) || FpanoLamp.IsLamp(item))
+            return true;
+        if (item is EFT.InventoryLogic.CompoundItem compound && compound.Slots != null)
+            foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+                if (slot?.ContainedItem != null && Ours(slot.ContainedItem))
+                    return true;
+        return false;
+    }
+
+    // what an icon frames: the active renderers' bounds together (for the log)
+    private static readonly List<Renderer> _framed = new List<Renderer>();
+    private static string Framed(Transform root)
+    {
+        root.GetComponentsInChildren(false, _framed);
+        bool any = false;
+        Bounds all = default;
+        foreach (Renderer r in _framed)
+        {
+            if (!any) { all = r.bounds; any = true; }
+            else all.Encapsulate(r.bounds);
+        }
+        int n = _framed.Count;
+        _framed.Clear();
+        return n + " renderers, bounds " + (any ? all.size.ToString("F3") + " around " + (all.center - root.position).ToString("F3") + " from the root" : "none");
+    }
+
+    // ---- the rails' icon with an F-PANO on their mod_nvg: the prefab's framing is for the rails alone and cut the
+    // lenses off; fitted on the real outlines (rails + goggle, cable plugged) for each of the goggle's two positions.
+    // The prefab's own values back without a goggle (the pool reuses the model) ----
+    private static readonly Dictionary<int, (Vector3 pos, bool offset, float scale)> _iconPrefab = new Dictionary<int, (Vector3, bool, float)>();
+    private static void IconFraming(Transform rails, EFT.InventoryLogic.Item railsItem)
+    {
+        PreviewPivot? pivot = rails.GetComponent<PreviewPivot>();
+        if (pivot == null || pivot.Icon == null)
+            return;
+        int id = pivot.GetInstanceID();
+        if (!_iconPrefab.TryGetValue(id, out var own))
+            _iconPrefab[id] = own = (pivot.Icon.position, pivot.Icon.hasOffset, pivot.Icon.boundsScale);
+        EFT.InventoryLogic.Item? goggle = null;
+        if (railsItem is EFT.InventoryLogic.CompoundItem compound && compound.Slots != null)
+            foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+                if (slot != null && slot.ID == "mod_nvg" && slot.ContainedItem != null && Kind(slot.ContainedItem) == 3)
+                    goggle = slot.ContainedItem;
+        if (goggle == null)
+        {
+            pivot.Icon.position = own.pos;
+            pivot.Icon.hasOffset = own.offset;
+            pivot.Icon.boundsScale = own.scale;
+            return;
+        }
+        bool down = goggle.GetItemComponent<EFT.InventoryLogic.TogglableComponent>()?.On ?? false;
+        pivot.Icon.boundsScale = down ? 1.1204f : 1.0348f;
+        pivot.Icon.position = down ? new Vector3(0.01557f, -0.00680f, 0f) : new Vector3(0.00498f, -0.01048f, 0f);
+        pivot.Icon.hasOffset = true;
+    }
+
     // a model made on its own (an icon, loot, the inspect window): the rails as the prefab has them, cables to their own
     private static void AfterMade(EFT.InventoryLogic.Item __0, GameObject __result)
     {
@@ -831,7 +915,10 @@ internal static class FpanoRailink
                 FpanoLamp.Attach(__result, __0);
             int kind = Kind(__0);
             if (kind == 1)
+            {
                 FitRails(__result.transform, __0);
+                IconFraming(__result.transform, __0);
+            }
             else if (kind != 0)
                 Cables(__result.transform, null);
             else if (_unbent.Count > 0 && Headsets().ContainsKey(__0.TemplateId.ToString()))
