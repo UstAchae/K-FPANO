@@ -148,6 +148,11 @@ internal static class FpanoRailink
     {
         Remember(node);
         string id = headset != null ? headset.TemplateId.ToString() : "";
+        if (id.Length > 0 && BakedSets().TryGetValue(id, out BakedSet set))
+        {
+            PlaceBaked(node, id, set, helmetRoot, railsRoot, helmetId);
+            return;
+        }
         bool placed = false;
         // the entry for this helmet (bare rails: the headset's own helmet, whose fit the rails then have)
         string fitOn = helmetRoot != null ? helmetId : (id.Length > 0 && Headsets() != null && _onRailsFit.TryGetValue(id, out string own0) ? own0 : "");
@@ -198,11 +203,134 @@ internal static class FpanoRailink
     private static readonly Dictionary<string, Mesh?> _bentCopies = new Dictionary<string, Mesh?>();
     private static readonly List<MeshFilter> _headsetFilters = new List<MeshFilter>();
 
-    // the headset's model under its slot node: bent for that key ("" = as it is)
-    private static void BendArms(Transform slot, string key)
+    // ---- headsets whose meshes are not readable (the ComTacs): whole shapes baked offline per rail helmet, in the
+    // headset root's frame for the table's helmet-root pose (item/railink_headset_meshes.json, bundle
+    // ustachae_fpano/railink_headsets.bundle); swapped onto every filter of the headset, the originals put back after ----
+    private struct BakedSet { public Dictionary<string, string> Helmets; public string Bare; }
+    private static Dictionary<string, BakedSet>? _bakedSets;
+    private static Dictionary<string, Mesh>? _bakedMeshes;
+    private static readonly HashSet<Mesh> _ours = new HashSet<Mesh>();      // meshes this file put on filters
+    private const string BakedBundleKey = "ustachae_fpano/railink_headsets.bundle";
+
+    private static Dictionary<string, BakedSet> BakedSets()
+    {
+        if (_bakedSets != null)
+            return _bakedSets;
+        _bakedSets = new Dictionary<string, BakedSet>();
+        try
+        {
+            using Stream? s = typeof(FpanoRailink).Assembly.GetManifestResourceStream("railink_headset_meshes.json");
+            if (s == null)
+            {
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: the baked headset index is missing from the DLL");
+                return _bakedSets;
+            }
+            using var reader = new StreamReader(s);
+            foreach (var entry in Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd()).Properties())
+            {
+                var set = new BakedSet { Helmets = new Dictionary<string, string>(), Bare = (string?)entry.Value["bare"] ?? "" };
+                if (entry.Value["helmets"] is Newtonsoft.Json.Linq.JObject helmets)
+                    foreach (var helmet in helmets.Properties())
+                        set.Helmets[helmet.Name] = (string?)helmet.Value ?? "";
+                _bakedSets[entry.Name] = set;
+            }
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: reading the baked headset index failed: " + e.Message);
+        }
+        return _bakedSets;
+    }
+
+    // the baked bundle, loaded the first time a baked headset goes on the rails; its file from SPT's own bundle table
+    private static Mesh? BakedMesh(string asset)
+    {
+        if (_bakedMeshes == null)
+        {
+            _bakedMeshes = new Dictionary<string, Mesh>();
+            try
+            {
+                AssetBundle? bundle = null;
+                foreach (AssetBundle loaded in AssetBundle.GetAllLoadedAssetBundles())
+                    if (loaded != null && loaded.name.EndsWith("railink_headsets.bundle", System.StringComparison.OrdinalIgnoreCase))
+                        bundle = loaded;
+                string? path = bundle == null ? BakedBundlePath() : null;
+                if (bundle == null && path != null && File.Exists(path))
+                    bundle = AssetBundle.LoadFromFile(path);
+                if (bundle == null)
+                    EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: baked headset bundle not found (" + (path ?? "not in SPT's bundle table") + "): ComTacs keep their own meshes");
+                else
+                {
+                    foreach (Mesh m in bundle.LoadAllAssets<Mesh>())
+                        _bakedMeshes[m.name] = m;
+                    EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: baked headset bundle loaded, " + _bakedMeshes.Count + " meshes");
+                }
+            }
+            catch (System.Exception e)
+            {
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: loading the baked headset bundle failed: " + e.Message);
+            }
+        }
+        return asset.Length > 0 && _bakedMeshes.TryGetValue(asset, out Mesh mesh) ? mesh : null;
+    }
+
+    private static string? BakedBundlePath()
+    {
+        var manager = HarmonyLib.AccessTools.TypeByName("SPT.Custom.Utils.BundleManager");
+        var table = HarmonyLib.AccessTools.Field(manager, "Bundles")?.GetValue(null) as System.Collections.IDictionary;
+        var getPath = HarmonyLib.AccessTools.Method(manager, "GetBundleFilePath");
+        if (table == null || getPath == null)
+            return null;
+        object? item = table.Contains(BakedBundleKey) ? table[BakedBundleKey] : null;
+        if (item == null)
+            foreach (System.Collections.DictionaryEntry e in table)
+                if (e.Key is string k && k.EndsWith("railink_headsets.bundle", System.StringComparison.OrdinalIgnoreCase))
+                    item = e.Value;
+        return item != null ? getPath.Invoke(null, new[] { item }) as string : null;
+    }
+
+    // a baked headset: on a helmet its slot node at the helmet root x the table's pos/rot at the helmet's own scale,
+    // on bare rails as before (rails root x onRails); then that helmet's baked shape on all its filters
+    private static void PlaceBaked(Transform node, string id, BakedSet set, Transform? helmetRoot, Transform railsRoot, string helmetId)
+    {
+        Headsets();
+        string asset = "";
+        string on = helmetRoot != null ? helmetId : "bare rails";
+        if (helmetRoot != null && Headsets().TryGetValue(id, out Pose p))
+        {
+            node.SetPositionAndRotation(helmetRoot.TransformPoint(p.P), helmetRoot.rotation * p.R);
+            if (node.parent != null)
+            {
+                Vector3 hs = helmetRoot.lossyScale, ps = node.parent.lossyScale;
+                node.localScale = new Vector3(hs.x / Mathf.Max(ps.x, 1e-6f), hs.y / Mathf.Max(ps.y, 1e-6f), hs.z / Mathf.Max(ps.z, 1e-6f));
+            }
+            set.Helmets.TryGetValue(helmetId, out asset);
+        }
+        else if (helmetRoot == null && _onRails.TryGetValue(id, out Pose bare))
+        {
+            node.SetPositionAndRotation(railsRoot.TransformPoint(bare.P), railsRoot.rotation * bare.R);
+            if (node.parent != null)
+            {
+                Vector3 own = _prefab[node.GetInstanceID()].S, scale = node.parent.localScale;
+                node.localScale = new Vector3(own.x / Mathf.Max(scale.x, 1e-6f), own.y / Mathf.Max(scale.y, 1e-6f), own.z / Mathf.Max(scale.z, 1e-6f));
+            }
+            asset = set.Bare;
+        }
+        else
+            Restore(node);
+        Mesh? baked = BakedMesh(asset ?? "");
+        BendArms(node, "", baked);
+        if (_logged.Add("baked/" + id + "/" + on))
+            EnvgFusionPlugin.Log?.LogInfo(baked != null
+                ? "F-PANO RAILINK: ComTac baked mesh " + asset + " on " + on
+                : "F-PANO RAILINK: ComTac " + id + " on " + on + ": no baked mesh" + (string.IsNullOrEmpty(asset) ? " in the index" : " " + asset + " in the bundle") + ", its own mesh");
+    }
+
+    // the headset's model under its slot node: a baked shape on every filter, else bent for that key ("" = as it is)
+    private static void BendArms(Transform slot, string key, Mesh? baked = null)
     {
         _bends.TryGetValue(key, out Bend bend);
-        bool bent = key.Length > 0 && _bends.ContainsKey(key);
+        bool bent = baked == null && key.Length > 0 && _bends.ContainsKey(key);
         for (int c = 0; c < slot.childCount; c++)
         {
             Transform root = slot.GetChild(c);
@@ -213,13 +341,17 @@ internal static class FpanoRailink
                 if (shown == null)
                     continue;
                 int fid = mf.GetInstanceID();
-                if (!shown.name.EndsWith(BentSuffix, System.StringComparison.Ordinal))
+                if (!_ours.Contains(shown))
                     _unbent[fid] = shown;
                 if (!_unbent.TryGetValue(fid, out Mesh original) || original == null)
                     continue;
-                Mesh? want = bent ? BentCopy(original, key, bend, root.worldToLocalMatrix * mf.transform.localToWorldMatrix) : original;
+                Mesh? want = baked != null ? baked : bent ? BentCopy(original, key, bend, root.worldToLocalMatrix * mf.transform.localToWorldMatrix) : original;
                 if (want != null && mf.sharedMesh != want)
+                {
+                    if (want != original)
+                        _ours.Add(want);
                     mf.sharedMesh = want;
+                }
             }
             _headsetFilters.Clear();
         }
@@ -232,7 +364,7 @@ internal static class FpanoRailink
             return;
         root.GetComponentsInChildren(true, _headsetFilters);
         foreach (MeshFilter mf in _headsetFilters)
-            if (mf.sharedMesh != null && mf.sharedMesh.name.EndsWith(BentSuffix, System.StringComparison.Ordinal) && _unbent.TryGetValue(mf.GetInstanceID(), out Mesh original) && original != null)
+            if (mf.sharedMesh != null && _ours.Contains(mf.sharedMesh) && _unbent.TryGetValue(mf.GetInstanceID(), out Mesh original) && original != null)
                 mf.sharedMesh = original;
         _headsetFilters.Clear();
     }
