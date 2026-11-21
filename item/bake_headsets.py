@@ -132,9 +132,21 @@ def bake(hid, tpl, mesh, own):
         mi = lab == mounts[s]; Mv = P0[mi]
         # the bar's own frame from its back plate: the mount's vertices within 4 mm of its deepest point along the
         # outward direction (x * side); long axis and plate normal by PCA of those, "across" pointing up
-        n0 = np.array([float(s), 0.0, 0.0]); dep = Mv @ n0; plate = Mv[dep < dep.min() + 0.004]; pcen = plate.mean(0)
-        u_, sv_, vt_ = np.linalg.svd(plate - pcen, full_matrices=False)
-        e3 = vt_[2] * np.sign(vt_[2] @ n0); e1 = vt_[0] - e3 * (vt_[0] @ e3); e1 /= np.linalg.norm(e1)
+        # the bar's own frame from its back plate: the mount's largest flat face turned inward (its triangles sharing
+        # one plane, 6 x 3 cm); its long axis (PCA) lies along the rail, its normal against the RAILINK face, "across"
+        # pointing up. (The points deepest along x were the hub's ring, not the plate: the bar came out across the rail.)
+        n0 = np.array([float(s), 0.0, 0.0]); Tm = tris[mi[tris].all(1)]; A = P0[Tm]
+        fn = np.cross(A[:, 1] - A[:, 0], A[:, 2] - A[:, 0]); far = np.linalg.norm(fn, axis=1) / 2; fn = fn / (2 * far[:, None] + 1e-12)
+        used = np.zeros(len(Tm), bool); faces = []
+        for i0 in np.argsort(-far):
+            if used[i0]: continue
+            g = (~used) & (fn @ fn[i0] > 0.985) & (np.abs((A[:, 0] - A[i0, 0]) @ fn[i0]) < 0.0015)
+            used |= g; faces.append((far[g].sum(), i0, g))
+        _, i0, g = max((f_ for f_ in faces if fn[f_[1]] @ n0 < -0.7), key=lambda f_: f_[0])
+        cen = A[g].mean(1); pcen = (cen * far[g, None]).sum(0) / far[g].sum(); plate = A[g].reshape(-1, 3)
+        e3 = -fn[i0]
+        u_, sv_, vt_ = np.linalg.svd(plate - plate.mean(0), full_matrices=False)
+        e1 = vt_[0] - e3 * (vt_[0] @ e3); e1 /= np.linalg.norm(e1)
         e2 = np.cross(e3, e1)
         if e2[1] < 0: e1 = -e1; e2 = -e2                          # across points up: the hub stays above the bar
         Fb = np.column_stack([e1, e3, e2])
