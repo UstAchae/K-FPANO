@@ -425,6 +425,44 @@ Shader "Justachae/FPANO/Outline"
         col = 1.0 - exp(-col);
         return float4(col * washout(i.uv) * field, 1);
     }
+
+    // ---- the F-PANO's symbology (passes 42, 43): stroke glyphs of seven segments, 0.5 wide and 1 high from their lower
+    // left corner (bits a 1 top, b 2 top right, c 4 bottom right, d 8 bottom, e 16 bottom left, f 32 top left, g 64 middle)
+    static const float Segments[10] = { 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 };
+    float segDist(float2 p, float2 a, float2 b)
+    {
+        float2 pa = p - a, ba = b - a;
+        return length(pa - ba * saturate(dot(pa, ba) / dot(ba, ba)));
+    }
+    float segLit(float m, float bit) { return fmod(floor(m / bit), 2.0); }
+    // the distance to the nearest lit stroke
+    float glyphDist(float2 p, float m)
+    {
+        float d = 1e3;
+        float2 tl = float2(0, 1), tr = float2(0.5, 1), ml = float2(0, 0.5), mr = float2(0.5, 0.5), bl = float2(0, 0), br = float2(0.5, 0);
+        if (segLit(m, 1) > 0.5) d = min(d, segDist(p, tl, tr));
+        if (segLit(m, 2) > 0.5) d = min(d, segDist(p, tr, mr));
+        if (segLit(m, 4) > 0.5) d = min(d, segDist(p, mr, br));
+        if (segLit(m, 8) > 0.5) d = min(d, segDist(p, bl, br));
+        if (segLit(m, 16) > 0.5) d = min(d, segDist(p, ml, bl));
+        if (segLit(m, 32) > 0.5) d = min(d, segDist(p, tl, ml));
+        if (segLit(m, 64) > 0.5) d = min(d, segDist(p, ml, mr));
+        return d;
+    }
+    // lit as the ENVG-B's symbology: a core, and a glow falling off over glowPx outside it, gone by 4 x that
+    float2 hudLight(float sd, float glowPx)
+    {
+        float core = saturate(sd + 0.5);
+        float beyond = saturate(-sd / (4.0 * glowPx));
+        return float2(core, exp(-max(-sd, 0.0) / glowPx) * (1.0 - beyond) * (1.0 - beyond) * (1.0 - core) * 0.55);
+    }
+    float boxSd(float2 p, float2 c, float2 h)
+    {
+        float2 q = abs(p - c) - h;
+        return -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0));
+    }
+    float4 _FpanoHud;    // xy: the ring's centre (screen uv), z: its radius (uv of height), w: width / height
+    float4 _FpanoHudB;   // x: the heading shown (whole degrees), z: brightness (0 off), w: the picture's height in pixels
     ENDCG
 
     SubShader
@@ -1889,7 +1927,7 @@ Shader "Justachae/FPANO/Outline"
         }
 
         // 42: the heading HUD in the fused picture in the eyepieces, added light lit as the ENVG-B's symbology: a ring
-        // around the heading in degrees (stroke digits), a red tick on the ring where north lies from the view
+        // around the heading in degrees (stroke digits)
         Pass
         {
             Blend One One
@@ -1897,31 +1935,7 @@ Shader "Justachae/FPANO/Outline"
             #pragma vertex vertScreen
             #pragma fragment fragHud
             #pragma target 3.0
-            float4 _FpanoHud;    // xy: the ring's centre (screen uv), z: its radius (uv of height), w: width / height
-            float4 _FpanoHudB;   // x: the heading shown (whole degrees), y: north's angle on the ring (radians, clockwise
-                                 // from the top), z: brightness (0 off), w: the picture's height in pixels
-            static const float Segments[10] = { 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 };
-            float segDist(float2 p, float2 a, float2 b)
-            {
-                float2 pa = p - a, ba = b - a;
-                return length(pa - ba * saturate(dot(pa, ba) / dot(ba, ba)));
-            }
-            float lit(float m, float bit) { return fmod(floor(m / bit), 2.0); }
-            // a digit's strokes, the glyph 0.5 wide and 1 high from its lower left corner: the distance to the nearest
-            float digitDist(float2 p, int n)
-            {
-                float m = Segments[clamp(n, 0, 9)];
-                float d = 1e3;
-                float2 tl = float2(0, 1), tr = float2(0.5, 1), ml = float2(0, 0.5), mr = float2(0.5, 0.5), bl = float2(0, 0), br = float2(0.5, 0);
-                if (lit(m, 1) > 0.5) d = min(d, segDist(p, tl, tr));
-                if (lit(m, 2) > 0.5) d = min(d, segDist(p, tr, mr));
-                if (lit(m, 4) > 0.5) d = min(d, segDist(p, mr, br));
-                if (lit(m, 8) > 0.5) d = min(d, segDist(p, bl, br));
-                if (lit(m, 16) > 0.5) d = min(d, segDist(p, ml, bl));
-                if (lit(m, 32) > 0.5) d = min(d, segDist(p, tl, ml));
-                if (lit(m, 64) > 0.5) d = min(d, segDist(p, ml, mr));
-                return d;
-            }
+            float digitDist(float2 p, int n) { return glyphDist(p, Segments[clamp(n, 0, 9)]); }
             float4 fragHud(v2f i) : SV_Target
             {
                 // in the ring's own units (radius 1, y up)
@@ -1932,10 +1946,6 @@ Shader "Justachae/FPANO/Outline"
                 float r = length(q);
                 // signed distances to each shape's edge, in pixels, positive inside
                 float ringSd = (0.055 - abs(r - 1.0)) / px;
-                // north on the ring
-                float a = atan2(q.x, q.y) - _FpanoHudB.y;
-                a = abs(a - 6.2831853 * floor(a / 6.2831853 + 0.5));
-                float tickSd = min((0.2 - a) * r, 0.1 - abs(r - 1.0)) / px;
                 // the digits and the degree sign, centred
                 int heading = (int)(_FpanoHudB.x + 0.5);
                 int count = heading >= 100 ? 3 : heading >= 10 ? 2 : 1;
@@ -1959,17 +1969,58 @@ Shader "Justachae/FPANO/Outline"
                 // lit as the ENVG-B's symbology: a near-white core and a cyan glow falling off over a few pixels (its
                 // width a fifth of the text's em), gone before the shape's reach
                 float glowPx = max(0.22 * h / 0.7 / px, 0.5);
-                float sd = max(ringSd, textSd);
-                float core = saturate(sd + 0.5);
-                float beyond = saturate(-sd / (4.0 * glowPx));
-                float glow = exp(-max(-sd, 0.0) / glowPx) * (1.0 - beyond) * (1.0 - beyond) * (1.0 - core) * 0.55;
-                float3 col = float3(0.80, 1.00, 1.00) * core + float3(0.10, 0.75, 1.00) * glow;
-                // the north tick over the ring, red, lit the same way
-                float tCore = saturate(tickSd + 0.5);
-                float tBeyond = saturate(-tickSd / (4.0 * glowPx));
-                float tGlow = exp(-max(-tickSd, 0.0) / glowPx) * (1.0 - tBeyond) * (1.0 - tBeyond) * (1.0 - tCore) * 0.55;
-                col = col * (1.0 - tCore) + float3(1.0, 0.15, 0.10) * tCore + float3(1.0, 0.08, 0.05) * tGlow * 0.6;
+                // the digits cyan-white, the ring in the overlay's own amber, each glowing in its colour
+                float2 t = hudLight(textSd, glowPx), g = hudLight(ringSd, glowPx);
+                float3 col = float3(0.80, 1.00, 1.00) * t.x + float3(0.10, 0.75, 1.00) * t.y + _EnvgCore.rgb * g.x + _EnvgHalo.rgb * g.y;
                 return float4(col * _FpanoHudB.z, 1);
+            }
+            ENDCG
+        }
+
+        // 43: the I2 gain bar, as the ENVG-B's: a yellow outline filled from the bottom at the tubes' gain, "I2 GAIN"
+        // under it, at the left of the thermal picture, while the gain changes and a moment after
+        Pass
+        {
+            Blend One One
+            CGPROGRAM
+            #pragma vertex vertScreen
+            #pragma fragment fragGainBar
+            #pragma target 3.0
+            float4 _FpanoGain;   // x: the thermal picture's left edge (uv), y: its centre (uv), z: its half height (uv),
+                                 // w: the gain (below 0: not shown)
+            static const float Label[7] = { 6, 91, 0, 61, 119, 6, 55 };   // I 2 (space) G A I N
+            float4 fragGainBar(v2f i) : SV_Target
+            {
+                if (_FpanoGain.w < 0.0 || _FpanoHudB.z <= 0.0)
+                    return float4(0, 0, 0, 1);
+                float H = _FpanoHudB.w;
+                float2 p = float2(i.uv.x * _FpanoHud.w, i.uv.y) * H;   // pixels
+                float halfH = _FpanoGain.z * H;
+                float ts = max(10.0, 0.104 * halfH), lw = max(1.0, 0.07 * ts);
+                float gx = _FpanoGain.x * _FpanoHud.w * H + 0.9 * ts;
+                float cy = _FpanoGain.y * H;
+                float gTop = cy + 0.55 * halfH, gBottom = cy - 0.45 * halfH;
+                float gw = 0.32 * ts, gMid = 0.5 * (gTop + gBottom), gHalf = 0.5 * (gTop - gBottom);
+                if (p.x < gx - gw - 2.0 * ts || p.x > gx + 5.0 * ts || p.y < gBottom - 2.5 * ts || p.y > gTop + 2.0 * ts)
+                    return float4(0, 0, 0, 1);
+                float sd = boxSd(p, float2(gx, gTop), float2(gw, 0.5 * lw));
+                sd = max(sd, boxSd(p, float2(gx, gBottom), float2(gw, 0.5 * lw)));
+                sd = max(sd, boxSd(p, float2(gx - gw, gMid), float2(0.5 * lw, gHalf)));
+                sd = max(sd, boxSd(p, float2(gx + gw, gMid), float2(0.5 * lw, gHalf)));
+                float inner = gHalf - 2.0 * lw, filled = 2.0 * inner * saturate(_FpanoGain.w);
+                if (filled > 0.5)
+                    sd = max(sd, boxSd(p, float2(gx, gBottom + 2.0 * lw + 0.5 * filled), float2(gw - 2.0 * lw, 0.5 * filled)));
+                // the label, glyphs half the em high
+                float gh = 0.5 * ts, adv = 0.8 * gh;
+                float2 at = float2(gx - gw, gBottom - 1.2 * ts);
+                [unroll] for (int k = 0; k < 7; k++)
+                {
+                    if (Label[k] > 0.5)
+                        sd = max(sd, 0.09 * gh - glyphDist((p - at - float2(k * adv, 0.0)) / gh, Label[k]) * gh);
+                }
+                float2 l = hudLight(sd, max(0.22 * ts, 0.5));
+                float3 yellow = float3(1.0, 214.0 / 255.0, 110.0 / 255.0);
+                return float4((yellow * l.x + yellow * 0.6 * l.y) * _FpanoHudB.z, 1);
             }
             ENDCG
         }

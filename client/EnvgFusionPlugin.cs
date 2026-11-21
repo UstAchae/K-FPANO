@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.33";
+    public const string Version = "0.2.34";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -197,6 +197,8 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
                 {
                     I2Level.Value = _gainLive;
                     _gainLive = -1f;
+                    Log?.LogInfo("F-PANO I2 gain set to " + I2Level.Value.ToString("F2") + " by the F-PANO's keys; the tubes get "
+                        + EnvgFusion.I2Gain.ToString("F2") + (EyepieceLink.TakesGain ? " through the eyepieces (nvg_fpano_LOD0)" : " here"));
                 }
             }
         }
@@ -773,7 +775,7 @@ internal static class EnvgFusion
         _fuseDraw.SetRenderTarget(dest);
         _fuseDraw.SetViewport(new Rect(0f, 0f, dest.width, dest.height));
         _fuseDraw.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, pass);
-        DrawHeading(_fuseDraw, at, dest, settled, EyepieceLink.FusedRect.y * radius * share);
+        DrawHeading(_fuseDraw, at, dest, settled, EyepieceLink.FusedRect.y * radius * share, EyepieceLink.FusedRect.x * radius * share / aspect);
         Graphics.ExecuteCommandBuffer(_fuseDraw);
         // the screen's own draw keeps the field at the centre
         Material.SetVector(FieldAtId, Vector4.zero);
@@ -788,14 +790,15 @@ internal static class EnvgFusion
     private static CommandBuffer? _fuseDraw;
 
     // ---- the heading HUD (the F-PANO's digital compass): a ring inside the thermal picture, top centre, with the
-    // heading in degrees (turning right raises it) and a red tick on the ring where north lies from the view. North is
+    // heading in degrees (turning right raises it). North is
     // the map's own, as the game's compass has it (LevelSettings.NorthVector). Part of the thermal overlay: drawn only
     // with it, lit as the ENVG-B's symbology (cyan-white, glowing). Its radius 0.064 of the tube's circle (as on the
     // maker's picture through the eyepiece), just inside the thermal picture's top edge ----
     private static readonly int HudId = Shader.PropertyToID("_FpanoHud");
     private static readonly int HudBId = Shader.PropertyToID("_FpanoHudB");
+    private static readonly int GainBarId = Shader.PropertyToID("_FpanoGain");
     private static bool _loggedHeading;
-    private static void DrawHeading(CommandBuffer cb, Vector4 at, RenderTexture dest, float settled, float halfHeight)
+    private static void DrawHeading(CommandBuffer cb, Vector4 at, RenderTexture dest, float settled, float halfHeight, float halfWidth)
     {
         if (_main == null || _fuseQuad == null || Material == null || settled <= 0f || !Heading(_main, out float heading))
             return;
@@ -806,8 +809,14 @@ internal static class EnvgFusion
         float above = Mathf.Max(halfHeight - ring - 0.035f * radius, 0f);
         cb.SetGlobalVector(HudId, new Vector4(at.x, at.y + above, ring, aspect));
         int shown = Mathf.RoundToInt(heading) % 360;
-        cb.SetGlobalVector(HudBId, new Vector4(shown, -heading * Mathf.Deg2Rad, settled, dest.height));
+        cb.SetGlobalVector(HudBId, new Vector4(shown, 0f, settled, dest.height));
         cb.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, 42);
+        // the I2 gain bar while the gain changes and a moment after (the level the tubes have now)
+        if (Time.unscaledTime < EnvgFusionPlugin.GainShownUntil)
+        {
+            cb.SetGlobalVector(GainBarId, new Vector4(at.x - halfWidth, at.y, halfHeight, I2Gain));
+            cb.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, 43);
+        }
         if (!_loggedHeading)
         {
             _loggedHeading = true;
