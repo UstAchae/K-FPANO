@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.31";
+    public const string Version = "0.2.32";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -773,6 +773,7 @@ internal static class EnvgFusion
         _fuseDraw.SetRenderTarget(dest);
         _fuseDraw.SetViewport(new Rect(0f, 0f, dest.width, dest.height));
         _fuseDraw.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, pass);
+        DrawHeading(_fuseDraw, at, dest, settled);
         Graphics.ExecuteCommandBuffer(_fuseDraw);
         // the screen's own draw keeps the field at the centre
         Material.SetVector(FieldAtId, Vector4.zero);
@@ -785,6 +786,52 @@ internal static class EnvgFusion
         return true;
     }
     private static CommandBuffer? _fuseDraw;
+
+    // ---- the heading HUD (the F-PANO's digital compass): a ring above the thermal picture, top centre, with the
+    // heading in degrees (turning right raises it) and a red tick on the ring where north lies from the view. North is
+    // the map's own, as the game's compass has it (LevelSettings.NorthVector). Part of the thermal overlay: drawn only
+    // with it. Placed as on the maker's picture through the eyepiece: its centre 0.61 of the tube's circle above the
+    // axis, its radius 0.064 of it ----
+    private static readonly int HudId = Shader.PropertyToID("_FpanoHud");
+    private static readonly int HudBId = Shader.PropertyToID("_FpanoHudB");
+    private static bool _loggedHeading;
+    private static void DrawHeading(CommandBuffer cb, Vector4 at, RenderTexture dest, float settled)
+    {
+        if (_main == null || _fuseQuad == null || Material == null || settled <= 0f || !Heading(_main, out float heading))
+            return;
+        float radius = Mathf.Max(at.z, 1e-3f);
+        float aspect = dest.width / (float)Mathf.Max(dest.height, 1);
+        cb.SetGlobalVector(HudId, new Vector4(at.x, at.y + 0.61f * radius, 0.064f * radius, aspect));
+        int shown = Mathf.RoundToInt(heading) % 360;
+        cb.SetGlobalVector(HudBId, new Vector4(shown, -heading * Mathf.Deg2Rad, 0.9f * settled, dest.height));
+        cb.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, 42);
+        if (!_loggedHeading)
+        {
+            _loggedHeading = true;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO heading HUD drawn: " + shown + " deg");
+        }
+    }
+
+    // the view's azimuth from the map's north, 0 to 360, clockwise seen from above
+    private static bool Heading(Camera camera, out float heading)
+    {
+        heading = 0f;
+        if (!Comfort.Common.Singleton<LevelSettings>.Instantiated)
+            return false;
+        Vector3 north = Comfort.Common.Singleton<LevelSettings>.Instance.NorthVector;
+        Transform t = camera.transform;
+        Vector3 look = Vector3.ProjectOnPlane(t.forward, Vector3.up);
+        // (looking straight down or up: the head's top shows the way it faces)
+        if (look.sqrMagnitude < 0.01f)
+            look = Vector3.ProjectOnPlane(t.forward.y < 0f ? t.up : -t.up, Vector3.up);
+        north = Vector3.ProjectOnPlane(north, Vector3.up);
+        if (look.sqrMagnitude < 1e-6f || north.sqrMagnitude < 1e-6f)
+            return false;
+        heading = Vector3.SignedAngle(north, look, Vector3.up);
+        if (heading < 0f)
+            heading += 360f;
+        return true;
+    }
 
     private static readonly int I2DimId = Shader.PropertyToID("_EnvgI2Dim");
     // (no battery in the rails: the tubes dark)

@@ -1887,5 +1887,79 @@ Shader "Justachae/FPANO/Outline"
             }
             ENDCG
         }
+
+        // 42: the heading HUD over the fused picture in the eyepieces, added like the overlay's own light: a ring
+        // around the heading in degrees (stroke digits), a red tick on the ring where north lies from the view
+        Pass
+        {
+            Blend One One
+            CGPROGRAM
+            #pragma vertex vertScreen
+            #pragma fragment fragHud
+            #pragma target 3.0
+            float4 _FpanoHud;    // xy: the ring's centre (screen uv), z: its radius (uv of height), w: width / height
+            float4 _FpanoHudB;   // x: the heading shown (whole degrees), y: north's angle on the ring (radians, clockwise
+                                 // from the top), z: brightness (0 off), w: the picture's height in pixels
+            static const float Segments[10] = { 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 };
+            float segDist(float2 p, float2 a, float2 b)
+            {
+                float2 pa = p - a, ba = b - a;
+                return length(pa - ba * saturate(dot(pa, ba) / dot(ba, ba)));
+            }
+            float lit(float m, float bit) { return fmod(floor(m / bit), 2.0); }
+            // a digit's strokes, the glyph 0.5 wide and 1 high from its lower left corner: the distance to the nearest
+            float digitDist(float2 p, int n)
+            {
+                float m = Segments[clamp(n, 0, 9)];
+                float d = 1e3;
+                float2 tl = float2(0, 1), tr = float2(0.5, 1), ml = float2(0, 0.5), mr = float2(0.5, 0.5), bl = float2(0, 0), br = float2(0.5, 0);
+                if (lit(m, 1) > 0.5) d = min(d, segDist(p, tl, tr));
+                if (lit(m, 2) > 0.5) d = min(d, segDist(p, tr, mr));
+                if (lit(m, 4) > 0.5) d = min(d, segDist(p, mr, br));
+                if (lit(m, 8) > 0.5) d = min(d, segDist(p, bl, br));
+                if (lit(m, 16) > 0.5) d = min(d, segDist(p, ml, bl));
+                if (lit(m, 32) > 0.5) d = min(d, segDist(p, tl, ml));
+                if (lit(m, 64) > 0.5) d = min(d, segDist(p, ml, mr));
+                return d;
+            }
+            float4 fragHud(v2f i) : SV_Target
+            {
+                // in the ring's own units (radius 1, y up)
+                float2 q = (i.uv - _FpanoHud.xy) * float2(_FpanoHud.w, 1.0) / max(_FpanoHud.z, 1e-5);
+                if (_FpanoHudB.z <= 0.0 || abs(q.x) > 1.4 || abs(q.y) > 1.4)
+                    return float4(0, 0, 0, 1);
+                float px = 1.0 / max(_FpanoHud.z * _FpanoHudB.w, 1.0);
+                float r = length(q);
+                float ring = saturate((0.055 - abs(r - 1.0)) / px + 0.5);
+                // north on the ring
+                float a = atan2(q.x, q.y) - _FpanoHudB.y;
+                a = abs(a - 6.2831853 * floor(a / 6.2831853 + 0.5));
+                float tick = saturate((0.2 - a) * r / px + 0.5) * saturate((0.1 - abs(r - 1.0)) / px + 0.5);
+                // the digits and the degree sign, centred
+                int heading = (int)(_FpanoHudB.x + 0.5);
+                int count = heading >= 100 ? 3 : heading >= 10 ? 2 : 1;
+                float h = 0.44, gap = 0.3 * h, w = 0.5 * h;
+                float total = count * (w + gap) + 0.26 * h;
+                float x0 = -0.5 * total;
+                float text = 0.0;
+                int div = count == 3 ? 100 : count == 2 ? 10 : 1;
+                [unroll] for (int k = 0; k < 3; k++)
+                {
+                    if (k < count)
+                    {
+                        int digit = (heading / div) % 10;
+                        float2 p = (q - float2(x0 + k * (w + gap), -0.5 * h)) / h;
+                        text = max(text, saturate((0.045 - digitDist(p, digit) * h) / px + 0.5));
+                        div = max(div / 10, 1);
+                    }
+                }
+                float2 deg = float2(x0 + count * (w + gap) + 0.12 * h, 0.5 * h - 0.12 * h);
+                text = max(text, saturate((0.035 - abs(length(q - deg) - 0.09 * h)) / px + 0.5));
+                float3 core = _EnvgCore.rgb;
+                float3 col = core * max(ring * (1.0 - tick), text) + float3(1.0, 0.12, 0.08) * tick;
+                return float4(col * _FpanoHudB.z, 1);
+            }
+            ENDCG
+        }
     }
 }
