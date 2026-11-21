@@ -244,7 +244,10 @@ def rig(parts, colour, out):
     f = np.clip((POWER_PLUG + POWER_BEND - d) / POWER_BEND, 0, 1); f = f * f * (3 - 2 * f)
     p = p + f[:, None] * shift
     sock = seated(sock_c[None])[0]
-    nodes.append({'name': 'fpano_power_socket', 'parent': '', 'pos': sock.tolist(), 'rot': [0, 0, 0, 1], 'mesh': '', 'mat': ''})
+    # The RAILINK group: the rails, the battery and the cable's socket under one node on the root (identity), which the
+    # client moves per helmet (item/railink_fit.json, from fit_helmets.py).
+    nodes.append({'name': 'fpano_railink', 'parent': '', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1], 'mesh': '', 'mat': ''})
+    nodes.append({'name': 'fpano_power_socket', 'parent': 'fpano_railink', 'pos': sock.tolist(), 'rot': [0, 0, 0, 1], 'mesh': '', 'mat': ''})
     write_mesh(out / 'fpano_power_cable.bin', seated(p), n @ Rdev.T, u)
     nodes.append({'name': 'fpano_power_cable', 'parent': '', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1], 'mesh': 'fpano_power_cable', 'mat': 'body',
                   'skin': True, 'bones': ['nvg_fpano_LOD0', 'fpano_power_socket'], 'weightCentre': sock.tolist(),
@@ -257,7 +260,7 @@ def rig(parts, colour, out):
         idx = np.arange(len(p)).reshape(-1, 3)[:, [0, 2, 1]].ravel()  # the mirror reverses the winding
         name = f'fpano_railink_{atlas}'
         write_mesh(out / f'{name}.bin', seated(p[idx]), n[idx] @ Rdev.T, u[idx])
-        nodes.append({'name': name, 'parent': '', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1], 'mesh': name, 'mat': atlas})
+        nodes.append({'name': name, 'parent': 'fpano_railink', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1], 'mesh': name, 'mat': atlas})
     q_on = mat2quat(Rdev)
     dq = qmul(GP_OFF, (-GP_ON[0], -GP_ON[1], -GP_ON[2], GP_ON[3]))
     sgn = np.sign((2 * np.arctan2(dq[0], dq[3]) + np.pi) % (2 * np.pi) - np.pi)

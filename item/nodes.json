@@ -137,8 +137,25 @@
    "mat": "body"
   },
   {
-   "name": "fpano_power_socket",
+   "name": "fpano_railink",
    "parent": "",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_power_socket",
+   "parent": "fpano_railink",
    "pos": [
     -0.08390007100591716,
     -0.03526919092207279,
@@ -184,7 +201,7 @@
   },
   {
    "name": "fpano_railink_rails",
-   "parent": "",
+   "parent": "fpano_railink",
    "pos": [
     0,
     0,
@@ -201,7 +218,7 @@
   },
   {
    "name": "fpano_railink_inside",
-   "parent": "",
+   "parent": "fpano_railink",
    "pos": [
     0,
     0,
@@ -218,7 +235,7 @@
   },
   {
    "name": "fpano_railink_battery",
-   "parent": "",
+   "parent": "fpano_railink",
    "pos": [
     0,
     0,
