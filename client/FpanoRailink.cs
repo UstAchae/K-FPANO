@@ -62,6 +62,55 @@ internal static class FpanoRailink
         return _fits;
     }
 
+    // where each helmet headset sits on the rails (item/railink_headsets.json): fpano_railink/mod_equipment's local pose
+    // under fpano_railink, mapped from that headset's own helmet; a headset not in it: the prefab's place (the RAC's)
+    private static Dictionary<string, Pose>? _headsets;
+    private static Dictionary<string, Pose> Headsets()
+    {
+        if (_headsets != null)
+            return _headsets;
+        _headsets = new Dictionary<string, Pose>();
+        try
+        {
+            using Stream? s = typeof(FpanoRailink).Assembly.GetManifestResourceStream("railink_headsets.json");
+            if (s == null)
+            {
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: the headset table is missing from the DLL");
+                return _headsets;
+            }
+            using var reader = new StreamReader(s);
+            foreach (var entry in Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd()).Properties())
+            {
+                var pos = entry.Value["pos"];
+                var rot = entry.Value["rot"];
+                if (pos == null || rot == null)
+                    continue;
+                _headsets[entry.Name] = new Pose { P = Vec(pos), R = new Quaternion((float)rot[0]!, (float)rot[1]!, (float)rot[2]!, (float)rot[3]!), S = Vector3.one };
+            }
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: reading the headset table failed: " + e.Message);
+        }
+        return _headsets;
+    }
+
+    // the rails' headset slot node placed for the headset in it (none, or one not in the table: as the prefab has it)
+    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset)
+    {
+        Remember(node);
+        string id = headset != null ? headset.TemplateId.ToString() : "";
+        if (id.Length > 0 && Headsets().TryGetValue(id, out Pose p))
+        {
+            node.localPosition = p.P;
+            node.localRotation = p.R;
+        }
+        else
+            Restore(node);
+        if (id.Length > 0 && _logged.Add("headset/" + id))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: headset " + id + " on the rails, " + (Headsets().ContainsKey(id) ? "at its own place" : "not in the table: at the prefab's place"));
+    }
+
     private static Vector3 Vec(Newtonsoft.Json.Linq.JToken? v) =>
         v != null && v.Type == Newtonsoft.Json.Linq.JTokenType.Array ? new Vector3((float)v[0]!, (float)v[1]!, (float)v[2]!) : Vector3.zero;
 
@@ -146,7 +195,13 @@ internal static class FpanoRailink
                 return;
             int kind = Kind(item);
             if (kind == 0)
+            {
+                // a headset into the rails' headset slot: that slot's node to the headset's own place
+                var into = item.Parent?.Container;
+                if (into != null && into.ID == "mod_equipment" && IsRails(into.ParentItem) && __instance.Bone != null)
+                    PlaceHeadset(__instance.Bone, item);
                 return;
+            }
             EFT.InventoryLogic.Item? rails = RailsAbove(item);
             Transform? railsRoot = kind == 1 ? itemView.transform : RailsRootAbove(__instance.Bone);
             if (rails != null && railsRoot != null)
@@ -239,6 +294,16 @@ internal static class FpanoRailink
         Transform? railsNvg = rails.Find("mod_nvg");
         if (group != null) Remember(group);
         if (railsNvg != null) Remember(railsNvg);
+        Transform? headsetNode = group != null ? group.Find("mod_equipment") : null;
+        if (headsetNode != null)
+        {
+            EFT.InventoryLogic.Item? headset = null;
+            if (railsItem is EFT.InventoryLogic.CompoundItem withSlots && withSlots.Slots != null)
+                foreach (EFT.InventoryLogic.Slot slot in withSlots.Slots)
+                    if (slot != null && slot.ID == "mod_equipment")
+                        headset = slot.ContainedItem;
+            PlaceHeadset(headsetNode, headset);
+        }
         EFT.InventoryLogic.Item? helmet = railsItem.Parent?.Container?.ParentItem;
         string helmetId = helmet != null ? helmet.TemplateId.ToString() : "";
         Transform? helmetNvg = helmet != null ? HelmetNvg(rails) : null;
