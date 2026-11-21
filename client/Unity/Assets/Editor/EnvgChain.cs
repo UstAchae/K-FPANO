@@ -218,6 +218,14 @@ internal static class EnvgChain
         Free(ref _heQuarter);
         Free(ref _foliageWide);
         Free(ref _foliageWideAcross);
+        Free(ref _depthHalf);
+        foreach (RenderTexture[] pair in _halves.Values)
+            for (int i = 0; i < pair.Length; i++)
+            {
+                RenderTexture? each = pair[i];
+                Free(ref each);
+            }
+        _halves.Clear();
         HeSmall = null;
         _heValid = false;
         Free(ref _agcCoarse);
@@ -254,12 +262,20 @@ internal static class EnvgChain
         {
             cb.SetGlobalTexture(FullDepthId, t.FullDepth);
             cb.SetGlobalVector(ZBufferId, t.ZBuffer);
-            cb.Blit(t.Normals, t.NormalsFwd, m, 22);
-            cb.Blit(t.Albedo, t.AlbedoFwd, m, 23);
-            cb.Blit(t.Depth, t.DepthFwd, m, 24);
+            Step(cb, t.Normals, t.NormalsFwd, m, 22);
+            Step(cb, t.Albedo, t.AlbedoFwd, m, 23);
+            Step(cb, t.Depth, t.DepthFwd, m, 24);
             cb.SetGlobalTexture(NormalsId, t.NormalsFwd);
             cb.SetGlobalTexture(AlbedoId, t.AlbedoFwd);
             cb.SetGlobalTexture(DepthId, t.DepthFwd);
+        }
+        // the depth at half the size, for the wide blurs over one surface (Blur)
+        RenderTexture? depthNow = !t.FromMain && t.DepthFwd != null ? t.DepthFwd : t.Depth;
+        if (depthNow != null && fineWidth >= 32 && fineHeight >= 32)
+        {
+            Ensure(ref _depthHalf, fineWidth / 2, fineHeight / 2, RenderTextureFormat.RGFloat, "Justachae thermal depth, half size");
+            Step(cb, depthNow, _depthHalf, m, 39);
+            cb.SetGlobalTexture(DepthHalfId, _depthHalf);
         }
         if (t.GrassMask != null)
             cb.SetGlobalTexture(GrassMaskId, t.GrassMask);
@@ -269,7 +285,7 @@ internal static class EnvgChain
         cb.SetGlobalVector(ThermoId, new Vector4(t.Air, t.LightHeating * t.Daylight, t.SkyCooling, 800f));
         // the geometric source (normals, inverse depth) smoothed by one and by two pixels, for smooth geometric edges
         // and for the temperature (surface orientation without the textures' bumps); in full floats
-        cb.Blit(t.Picture, t.GeoSource, m, 18);
+        Step(cb, t.Picture, t.GeoSource, m, 18);
         Blur(cb, m, t.GeoSource!, t.GeoNear!, 0.5f, fineWidth, fineHeight, t.GeoAcross!);
         Blur(cb, m, t.GeoNear!, t.GeoFar!, 0.8660254f, fineWidth, fineHeight, t.GeoAcross!);
         cb.SetGlobalTexture(GeoNearId, t.GeoNear);
@@ -290,7 +306,7 @@ internal static class EnvgChain
         // foliage: where rough surfaces crowd (a crown, a bush), over about five pixels
         if (t.Foliage != null)
         {
-            cb.Blit(t.Picture, t.Foliage, m, 28);
+            Step(cb, t.Picture, t.Foliage, m, 28);
             Blur(cb, m, t.Foliage, t.Foliage, 4f * t.Oversample, fineWidth, fineHeight, t.Across!);
             cb.SetGlobalTexture(FoliageId, t.Foliage);
             // and over a wide area, at a quarter of the size (a road against the gaps between tufts)
@@ -298,14 +314,14 @@ internal static class EnvgChain
             Ensure(ref _foliageWide, qw, qh, RenderTextureFormat.RHalf, "Justachae F-PANO foliage, wide");
             Ensure(ref _foliageWideAcross, qw, qh, RenderTextureFormat.RHalf, "Justachae F-PANO foliage, wide across");
             // (the ground's cover only: a tree's crown must not make the ground round its foot count as grass)
-            cb.Blit(t.Foliage, _foliageWide, m, 31);
+            Step(cb, t.Foliage, _foliageWide, m, 31);
             Blur(cb, m, _foliageWide!, _foliageWide!, 3f, qw, qh, _foliageWideAcross!);
             cb.SetGlobalTexture(FoliageWideId, _foliageWide);
         }
-        cb.Blit(t.Picture, t.Heat2x, m, 14);
+        Step(cb, t.Picture, t.Heat2x, m, 14);
         // seams between meshes that see no surface are filled from the surfaces around; the geometric edges into g
-        cb.Blit(t.Heat2x, t.Seams, m, 16);
-        cb.Blit(t.Seams, t.HistoryB);
+        Step(cb, t.Heat2x, t.Seams, m, 16);
+        Step(cb, t.Seams, t.HistoryB);
         // followed in time (the jittered copy's edges settle, as the game's TAA settles its picture)
         // (a gap in the frames, the thermal picture off for a while, leaves the history stale: it starts anew)
         if (t.Frame >= 0 && _lastFrame >= 0 && t.Frame != _lastFrame + 1)
@@ -333,9 +349,9 @@ internal static class EnvgChain
             if (depthPrevOk)
                 cb.SetGlobalTexture(DepthPrevId, _depthPrev);
             cb.SetGlobalVector(HeatTemporalId, new Vector4(_heatHistoryValid ? t.HeatTemporal : 0f, _heatHistoryValid && depthPrevOk ? 1f : 0f, 0f, 0f));
-            cb.Blit(t.HistoryB, next, m, 36);
-            cb.Blit(t.HistoryB, countNow, m, 38);
-            cb.Blit(next, t.HistoryB);
+            Step(cb, t.HistoryB, next, m, 36);
+            Step(cb, t.HistoryB, countNow, m, 38);
+            Step(cb, next, t.HistoryB);
             _heatHistoryValid = true;
         }
         else
@@ -344,16 +360,16 @@ internal static class EnvgChain
         if (t.HeatBase != null)
         {
             Blur(cb, m, t.HistoryB, t.HeatBase, 3f * t.Oversample, fineWidth, fineHeight, t.Across!, true);
-            cb.Blit(t.HeatBase, t.HistoryB, m, 30);
+            Step(cb, t.HeatBase, t.HistoryB, m, 30);
             // and a small copy of the base for the histogram (read back to the CPU)
             HeSmall = Ensure(ref _heSmall, HeWidth, HeHeight, RenderTextureFormat.RFloat, "Justachae F-PANO histogram source");
             // averaged down in halving steps (a plain copy picked every few pixels, and as the view swayed the picked
             // ones changed: the percentiles and the whole display breathed)
             RenderTexture heHalf = Ensure(ref _heHalf, Mathf.Max(HeWidth * 2, 2), Mathf.Max(HeHeight * 2, 2), RenderTextureFormat.RFloat, "Justachae F-PANO histogram source, half");
             RenderTexture heQuarter = Ensure(ref _heQuarter, Mathf.Max(HeWidth * 4, 4), Mathf.Max(HeHeight * 4, 4), RenderTextureFormat.RFloat, "Justachae F-PANO histogram source, quarter");
-            cb.Blit(t.HeatBase, heQuarter);
-            cb.Blit(heQuarter, heHalf);
-            cb.Blit(heHalf, _heSmall);
+            Step(cb, t.HeatBase, heQuarter);
+            Step(cb, heQuarter, heHalf);
+            Step(cb, heHalf, _heSmall);
         }
         // the gain control: the picture's mean and spread over the surfaces only (the cold sky would set the scale and
         // flatten everything on the ground), followed over a second
@@ -364,12 +380,12 @@ internal static class EnvgChain
         Ensure(ref _agcB, 1, 1, RenderTextureFormat.RGFloat, "Justachae F-PANO AGC B");
         (_agcA, _agcB) = (_agcB, _agcA);
         cb.SetGlobalVector(ReduceId, new Vector4(4f, 1f / 32f, 1f / 18f, 3f));
-        cb.Blit(t.HistoryB, agcCoarse, m, 9);
+        Step(cb, t.HistoryB, agcCoarse, m, 9);
         cb.SetGlobalVector(ReduceId, new Vector4(8f, 1f, 1f, 2f));
-        cb.Blit(agcCoarse, agcMean, m, 9);
+        Step(cb, agcCoarse, agcMean, m, 9);
         cb.SetGlobalTexture(HistoryId, _agcA);
         cb.SetGlobalVector(LagId, new Vector4(agcFresh ? 1f : 1f - Mathf.Exp(-Mathf.Max(t.DeltaTime, 0f) / 1f), 0f, 0f, 0f));
-        cb.Blit(agcMean, _agcB, m, 10);
+        Step(cb, agcMean, _agcB, m, 10);
         cb.SetGlobalTexture(AgcId, _agcB);
         // the lens's blur (radius in detector pixels, at least half of one) is the filter's centre; the surround is the
         // same at twice the radius
@@ -378,7 +394,7 @@ internal static class EnvgChain
         Blur(cb, m, t.Blurred!, t.Surround!, centre * 1.7320508f * 0.5f, fineWidth, fineHeight, t.Across!);
         cb.SetGlobalTexture(SurroundId, t.Surround);
         // the heat's local mean and mean square (about twelve processing pixels) for local contrast
-        cb.Blit(t.HistoryB, t.LocalSquare, m, 20);
+        Step(cb, t.HistoryB, t.LocalSquare, m, 20);
         Blur(cb, m, t.LocalSquare!, t.LocalMoments!, 6f * t.Oversample, fineWidth, fineHeight, t.Across!);
         cb.SetGlobalTexture(LocalId, t.LocalMoments);
         // heat edges and geometric edges as one set of lines
@@ -386,7 +402,7 @@ internal static class EnvgChain
         cb.SetGlobalVector(GainLimitId, new Vector4(Mathf.Max(t.MinSpread, 0.05f) / 100f, 0f, 0f, 0f));
         cb.SetGlobalVector(FoliageStepId, new Vector4(t.FoliageStepLo, t.FoliageStepHi, 0f, 0f));
         cb.SetGlobalVector(MixId, new Vector4(t.HeatEdges, t.GeometryEdges, t.LocalContrast, t.ShapeNeedsHeat));
-        cb.Blit(t.Blurred, t.Edges, m, 11);
+        Step(cb, t.Blurred, t.Edges, m, 11);
         // like the game's TAA: last frame's edge strength, brought to where things are now by the game's motion vectors
         // and held within this frame's neighbourhood, blended in before the threshold
         RenderTexture followed = t.Edges!;
@@ -398,16 +414,16 @@ internal static class EnvgChain
             cb.SetGlobalTexture(MotionId, t.Motion);
             cb.SetGlobalTexture(EdgeHistoryId, previous);
             cb.SetGlobalVector(TemporalId, new Vector4(_edgeHistoryValid ? t.Temporal : 0f, 0f, 0f, 0f));
-            cb.Blit(t.Edges, next, m, 27);
+            Step(cb, t.Edges, next, m, 27);
             _edgeHistoryValid = true;
             followed = next;
         }
         else
             _edgeHistoryValid = false;
         // each edge's centre line (one pixel wide, along the response's ridge), through the threshold
-        cb.Blit(followed, t.Ridge, m, 26);
+        Step(cb, followed, t.Ridge, m, 26);
         // how crowded the lines are around each point, and their glow
-        cb.Blit(t.Ridge, t.Presence);
+        Step(cb, t.Ridge, t.Presence);
         Blur(cb, m, t.Presence!, t.Density!, 3f * t.Oversample, fineWidth, fineHeight, t.Across!);
         Blur(cb, m, t.Presence!, t.Glow!, 2.5f * t.Oversample, fineWidth, fineHeight, t.Across!);
         cb.SetGlobalTexture(GlowId, t.Glow);
@@ -418,24 +434,75 @@ internal static class EnvgChain
         {
             Ensure(ref _depthPrev, t.Depth.width, t.Depth.height, RenderTextureFormat.RGFloat, "Justachae F-PANO depth, last frame");
             // (written below this frame: valid from the next on)
-            cb.Blit(t.Depth, _depthPrev);
+            Step(cb, t.Depth, _depthPrev);
             _depthPrevValid = true;
         }
+    }
+
+
+    // Offline timing only (EnvgPerfTest): when Steps is set, each blit of the chain is noted with what it reads, writes
+    // and the blur settings it runs with. Null in the game: nothing noted.
+    internal struct StepNote { public Texture From; public RenderTexture To; public int Pass; public Vector4 Wide, Blur; }
+    internal static System.Collections.Generic.List<StepNote>? Steps;
+    private static Vector4 _wideNow, _blurNow;
+    private static void Step(CommandBuffer cb, Texture? from, RenderTexture? to, Material? m = null, int pass = -1)
+    {
+        if (m != null) cb.Blit(from, to, m, pass); else cb.Blit(from, to);
+        if (Steps != null && from != null && to != null)
+            Steps.Add(new StepNote { From = from, To = to, Pass = m != null ? pass : -1, Wide = _wideNow, Blur = _blurNow });
     }
 
     // A gaussian of the given step (sigma about two steps). A wide one is made of several narrow ones (their variances
     // add): taps more than a pixel and a half apart left copies of every edge (a comb) instead of a smooth blur.
     private static readonly int WideId = Shader.PropertyToID("_EnvgWide");
+    // A wide one (a step of 2.5 pixels or more: smooth over a dozen pixels and more) is worked out at half the size:
+    // across on a half-size copy, then down into the full size, each pixel keeping its own value and, over one surface,
+    // its own depth (pass 39 to 41). A quarter of the pixels and half the taps across, half the taps down: the chain's
+    // largest cost (measured offline at the game's size: the wide blurs were three quarters of it).
+    private static readonly int DepthHalfId = Shader.PropertyToID("_EnvgDepthHalf");
+    private static readonly int WideOwnId = Shader.PropertyToID("_EnvgWideOwn");
+    private static RenderTexture? _depthHalf;
+    // the half-size work textures, a pair for each size the wide blurs run at (the sensor's, the wide foliage's): kept,
+    // never made anew between the sizes
+    private static readonly System.Collections.Generic.Dictionary<int, RenderTexture[]> _halves = new System.Collections.Generic.Dictionary<int, RenderTexture[]>();
+    internal static bool HalfWide = true;   // (false only offline, to compare with the full-size blurs)
     internal static void Blur(CommandBuffer cb, Material m, RenderTexture from, RenderTexture to, float step, int width, int height, RenderTexture across, bool sameSurface = false)
     {
         int passes = Mathf.Clamp(Mathf.CeilToInt(step * step / 2.25f), 1, 8);
+        int hw = width / 2, hh = height / 2;
+        if (HalfWide && step >= 2.5f && hw >= 16 && hh >= 16 && (!sameSurface || _depthHalf != null && _depthHalf.width == hw && _depthHalf.height == hh))
+        {
+            int key = hw * 65536 + hh;
+            if (!_halves.TryGetValue(key, out RenderTexture[] pair) || pair[0] == null || pair[1] == null)
+            {
+                RenderTexture? a = null, b = null;
+                pair = new[] { Ensure(ref a, hw, hh, RenderTextureFormat.ARGBFloat, "Justachae thermal wide blur, half size"),
+                               Ensure(ref b, hw, hh, RenderTextureFormat.ARGBFloat, "Justachae thermal wide blur, half size across") };
+                _halves[key] = pair;
+            }
+            RenderTexture _halfSrc = pair[0], _halfMid = pair[1];
+            float half = step * 0.5f;
+            // (over one surface: one texel of each four, as it is; else their average)
+            if (sameSurface) Step(cb, from, _halfSrc, m, 39); else Step(cb, from, _halfSrc);
+            cb.SetGlobalVector(WideId, _wideNow = new Vector4(1.69f * half, Mathf.Ceil(3f * 1.69f * half), 1f / hw, 0f));
+            Step(cb, _halfSrc, _halfMid, m, sameSurface ? 40 : 33);
+            cb.SetGlobalVector(WideId, _wideNow = new Vector4(1.69f * half, Mathf.Ceil(3f * 1.69f * half), 0f, 1f / hh));
+            if (sameSurface)
+            {
+                cb.SetGlobalTexture(WideOwnId, from);
+                Step(cb, _halfMid, to, m, 41);
+            }
+            else
+                Step(cb, _halfMid, to, m, 33);
+            return;
+        }
         if (passes > 1)
         {
             // as wide as those passes together (sigma 1.69 steps of each, added in squares: 1.69 x the step), in one
-            cb.SetGlobalVector(WideId, new Vector4(1.69f * step, Mathf.Ceil(3f * 1.69f * step), 1f / width, 0f));
-            cb.Blit(from, across, m, sameSurface ? 34 : 33);
-            cb.SetGlobalVector(WideId, new Vector4(1.69f * step, Mathf.Ceil(3f * 1.69f * step), 0f, 1f / height));
-            cb.Blit(across, to, m, sameSurface ? 34 : 33);
+            cb.SetGlobalVector(WideId, _wideNow = new Vector4(1.69f * step, Mathf.Ceil(3f * 1.69f * step), 1f / width, 0f));
+            Step(cb, from, across, m, sameSurface ? 34 : 33);
+            cb.SetGlobalVector(WideId, _wideNow = new Vector4(1.69f * step, Mathf.Ceil(3f * 1.69f * step), 0f, 1f / height));
+            Step(cb, across, to, m, sameSurface ? 34 : 33);
             return;
         }
         float each = step / Mathf.Sqrt(passes);
@@ -443,10 +510,10 @@ internal static class EnvgChain
         RenderTexture source = from;
         for (int k = 0; k < passes; k++)
         {
-            cb.SetGlobalVector(BlurId, new Vector4(each / width, 0f, 0f, 0f));
-            cb.Blit(source, across, m, pass);
-            cb.SetGlobalVector(BlurId, new Vector4(0f, each / height, 0f, 0f));
-            cb.Blit(across, to, m, pass);
+            cb.SetGlobalVector(BlurId, _blurNow = new Vector4(each / width, 0f, 0f, 0f));
+            Step(cb, source, across, m, pass);
+            cb.SetGlobalVector(BlurId, _blurNow = new Vector4(0f, each / height, 0f, 0f));
+            Step(cb, across, to, m, pass);
             source = to;
         }
     }

@@ -1649,6 +1649,8 @@ Shader "Justachae/FPANO/Outline"
             ENDCG
         }
 
+        // (39 to 41, after 38 below: the wide blurs worked out at half the size)
+
         // 35: the symbology (EnvgHud): light added to the eyepiece's picture, as the overlay display adds it. Glyphs
         // from a TextMeshPro distance atlas (kind 0) and solid bars (kind 1, their distance worked out here); a
         // near-white core and a cyan glow falling off over a few pixels outside it.
@@ -1801,6 +1803,87 @@ Shader "Justachae/FPANO/Outline"
                 if (sameSurfaceThen(previous, predicted))
                     return historyHolds(i.uv, previous) ? min(tex2Dlod(_EnvgHeatCount, float4(previous, 0, 0)).r + 1.0, HeatFrames) : 1.0;
                 return 1;
+            }
+            ENDCG
+        }
+
+        // 39: a half-size copy for the wide same-surface blurs: one texel of each two by two, as it is (an average would
+        // mix two surfaces where an edge crosses the four); the depth halved the same way
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment fragPick
+            float4 fragPick(v2f i) : SV_Target
+            {
+                return tex2Dlod(_MainTex, float4(i.uv - 0.5 * _MainTex_TexelSize.xy, 0, 0));
+            }
+            ENDCG
+        }
+
+        // 40: pass 34 at half the size, along x: the half-size copy, over one surface by the half-size depth. The wide
+        // blurs are smooth over many pixels: worked out on a quarter of the pixels, with half the taps
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment fragWideHalfAcross
+            #pragma target 3.0
+            float4 _EnvgWide;
+            sampler2D _EnvgDepthHalf;
+            float4 fragWideHalfAcross(v2f i) : SV_Target
+            {
+                float k = -0.5 / max(_EnvgWide.x * _EnvgWide.x, 1e-4);
+                float d0 = tex2Dlod(_EnvgDepthHalf, float4(i.uv, 0, 0)).r;
+                float tol = 0.04 * d0 + 0.05;
+                float4 s = tex2Dlod(_MainTex, float4(i.uv, 0, 0));
+                float total = 1.0;
+                int r = (int)_EnvgWide.y;
+                [loop] for (int n = 1; n <= r; n += 2)
+                {
+                    float wa = exp(k * n * n), wb = exp(k * (n + 1) * (n + 1));
+                    float w = wa + wb;
+                    float2 o = _EnvgWide.zw * ((n * wa + (n + 1) * wb) / w);
+                    float a = w * saturate(1.0 - abs(tex2Dlod(_EnvgDepthHalf, float4(i.uv + o, 0, 0)).r - d0) / tol);
+                    float b = w * saturate(1.0 - abs(tex2Dlod(_EnvgDepthHalf, float4(i.uv - o, 0, 0)).r - d0) / tol);
+                    s += tex2Dlod(_MainTex, float4(i.uv + o, 0, 0)) * a + tex2Dlod(_MainTex, float4(i.uv - o, 0, 0)) * b;
+                    total += a + b;
+                }
+                return s / total;
+            }
+            ENDCG
+        }
+
+        // 41: then along y into the full size: each pixel its own value and its own depth (so the surfaces stay apart
+        // at full size), the taps from the half-size pass 40, over the same surface by the half-size depth
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment fragWideHalfDown
+            #pragma target 3.0
+            float4 _EnvgWide;
+            sampler2D _EnvgDepthHalf;
+            sampler2D _EnvgWideOwn;
+            float4 fragWideHalfDown(v2f i) : SV_Target
+            {
+                float k = -0.5 / max(_EnvgWide.x * _EnvgWide.x, 1e-4);
+                float d0 = tex2Dlod(_EnvgDepth, float4(i.uv, 0, 0)).r;
+                float tol = 0.04 * d0 + 0.05;
+                float4 s = tex2Dlod(_EnvgWideOwn, float4(i.uv, 0, 0));
+                float total = 1.0;
+                int r = (int)_EnvgWide.y;
+                [loop] for (int n = 1; n <= r; n += 2)
+                {
+                    float wa = exp(k * n * n), wb = exp(k * (n + 1) * (n + 1));
+                    float w = wa + wb;
+                    float2 o = _EnvgWide.zw * ((n * wa + (n + 1) * wb) / w);
+                    float a = w * saturate(1.0 - abs(tex2Dlod(_EnvgDepthHalf, float4(i.uv + o, 0, 0)).r - d0) / tol);
+                    float b = w * saturate(1.0 - abs(tex2Dlod(_EnvgDepthHalf, float4(i.uv - o, 0, 0)).r - d0) / tol);
+                    s += tex2Dlod(_MainTex, float4(i.uv + o, 0, 0)) * a + tex2Dlod(_MainTex, float4(i.uv - o, 0, 0)) * b;
+                    total += a + b;
+                }
+                return s / total;
             }
             ENDCG
         }

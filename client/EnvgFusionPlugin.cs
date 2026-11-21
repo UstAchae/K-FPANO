@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.25";
+    public const string Version = "0.2.26";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1274,10 +1274,10 @@ internal static class EnvgFusion
         Ensure(ref EdgeHistB, width * Oversample, height * Oversample, 0, RenderTextureFormat.RHalf, "Justachae F-PANO edges, followed B");
         Ensure(ref AlbedoSoft, fineWidth, fineHeight, 0, RenderTextureFormat.ARGBHalf, "Justachae F-PANO albedo, averaged");
         Ensure(ref Presence, width * Oversample, height * Oversample, 0, RenderTextureFormat.ARGBHalf, "Justachae F-PANO line presence");
-        Ensure(ref Density, width * Oversample, height * Oversample, 0, RenderTextureFormat.ARGBHalf, "Justachae F-PANO line density");
-        Ensure(ref Glow, width * Oversample, height * Oversample, 0, RenderTextureFormat.ARGBHalf, "Justachae F-PANO line glow");
+        Ensure(ref Density, Mathf.Max(width * Oversample / 2, 16), Mathf.Max(height * Oversample / 2, 16), 0, RenderTextureFormat.ARGBHalf, "Justachae F-PANO line density, half size");   // (wide and smooth: half the size)
+        Ensure(ref Glow, Mathf.Max(width * Oversample / 2, 16), Mathf.Max(height * Oversample / 2, 16), 0, RenderTextureFormat.ARGBHalf, "Justachae F-PANO line glow, half size");   // (wide and smooth: half the size)
         Ensure(ref LocalSquare, width * Oversample, height * Oversample, 0, RenderTextureFormat.ARGBFloat, "Justachae F-PANO heat squared");
-        Ensure(ref LocalMoments, width * Oversample, height * Oversample, 0, RenderTextureFormat.ARGBFloat, "Justachae F-PANO local moments");
+        Ensure(ref LocalMoments, Mathf.Max(width * Oversample / 2, 16), Mathf.Max(height * Oversample / 2, 16), 0, RenderTextureFormat.ARGBFloat, "Justachae F-PANO local moments, half size");   // (wide and smooth: half the size)
 
         {
             Matrix4x4 unjittered = main.nonJitteredProjectionMatrix;
