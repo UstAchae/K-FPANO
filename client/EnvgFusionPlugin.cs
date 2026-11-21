@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.16";
+    public const string Version = "0.2.17";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -38,7 +38,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     internal const string ShowOutline = "轮廓", ShowFusion = "白热融合", ShowBlackHot = "黑热融合", ShowI2 = "纯夜视";
     // the device's four modes, in the order the arrow keys step through them
     internal static readonly string[] Modes = { ShowI2, ShowOutline, ShowFusion, ShowBlackHot };
-    internal static ConfigEntry<BepInEx.Configuration.KeyboardShortcut>? NextMode, PreviousMode, GainUp, GainDown;
+    internal static ConfigEntry<BepInEx.Configuration.KeyboardShortcut>? NextMode, PreviousMode, GainUp, GainDown, LeftLight, RightLight;
     internal static ConfigEntry<float>? I2Level;
     private const float GainFullTravel = 2.5f;   // seconds for the gain to go from dark to full with an arrow held
     internal static float GainShownUntil;   // the I2 gain bar shows while it changes and for a moment after
@@ -69,6 +69,10 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             new ConfigDescription("调高夜视管增益：点一下微调，按住连续变化（从 0 到满约 2.5 秒）。调节时目镜热像框里靠左边显示黄色的 I2 GAIN 竖条。", null, new ConfigurationManagerAttributes { Order = 8 }));
         GainDown = Config.Bind(Section, "夜视增益 -", new BepInEx.Configuration.KeyboardShortcut(KeyCode.DownArrow),
             new ConfigDescription("调低夜视管增益：点一下微调，按住连续变化；调到 0 夜视画面全黑，只剩热像（轮廓模式下就只有轮廓）。", null, new ConfigurationManagerAttributes { Order = 8 }));
+        LeftLight = Config.Bind("RAILINK 照明", "左侧照明切换模式", new BepInEx.Configuration.KeyboardShortcut(KeyCode.LeftArrow, KeyCode.LeftControl),
+            new ConfigDescription("切换 RAILINK 左侧（佩戴者的左边）前灯的模式。H 仍然开关全部头灯，Ctrl+H 只切换频闪灯的效果。", null, new ConfigurationManagerAttributes { Order = 2 }));
+        RightLight = Config.Bind("RAILINK 照明", "右侧照明切换模式", new BepInEx.Configuration.KeyboardShortcut(KeyCode.RightArrow, KeyCode.LeftControl),
+            new ConfigDescription("切换 RAILINK 右侧前灯的模式。", null, new ConfigurationManagerAttributes { Order = 1 }));
         I2Level = Config.Bind(Section, "夜视管增益", 1f,
             new ConfigDescription("夜视管增益，0 到 1（游戏里按住 ↑ ↓ 调）。0 是关掉夜视画面，只看热像。", new AcceptableValueRange<float>(0f, 1f), new ConfigurationManagerAttributes { Order = 8 }));
         Brightness = Config.Bind(Section, "轮廓亮度", 1f,
@@ -152,6 +156,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         // the sights' glass: the red dots and holographic sights the game has enabled, as it announces them
         FpanoRailink.Patch(harmony);
         FpanoSlotIcons.Patch(harmony);
+        FpanoLights.Patch(harmony);
         MethodInfo? nvPreCull = AccessTools.Method(typeof(BSG.CameraEffects.NightVision), "OnPreCull");
         if (nvPreCull != null)
             harmony.Patch(nvPreCull, postfix: new HarmonyMethod(typeof(EnvgFusion), nameof(EnvgFusion.AfterNightVisionPreCull)));
@@ -160,7 +165,9 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 
     private void Update()
     {
-        bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+        bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)
+            || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
+        FpanoLights.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
@@ -1016,6 +1023,24 @@ internal static class EnvgFusion
             SetWhitePhosphor();
     }
 
+    // the shader bundle, loaded once (an asset bundle can be loaded only once), its shaders kept by name
+    private static readonly Dictionary<string, Shader> _bundleShaders = new Dictionary<string, Shader>();
+    private static bool _bundleLoaded;
+    private static string BundlePath => Path.Combine(Path.GetDirectoryName(typeof(EnvgFusion).Assembly.Location) ?? "", "fpanofusion.bundle");
+    private static bool LoadBundle()
+    {
+        if (!_bundleLoaded)
+        {
+            _bundleLoaded = true;
+            AssetBundle? bundle = File.Exists(BundlePath) ? AssetBundle.LoadFromFile(BundlePath) : null;
+            if (bundle != null)
+                foreach (Shader shader in bundle.LoadAllAssets<Shader>())
+                    _bundleShaders[shader.name] = shader;
+        }
+        return _bundleShaders.Count > 0;
+    }
+    internal static Shader? BundleShader(string name) => LoadBundle() && _bundleShaders.TryGetValue(name, out Shader shader) ? shader : null;
+
     private static bool EnsureMaterial()
     {
         if (Material != null)
@@ -1023,11 +1048,10 @@ internal static class EnvgFusion
         if (_bundleTried)
             return false;
         _bundleTried = true;
-        string path = Path.Combine(Path.GetDirectoryName(typeof(EnvgFusion).Assembly.Location) ?? "", "fpanofusion.bundle");
-        AssetBundle? bundle = File.Exists(path) ? AssetBundle.LoadFromFile(path) : null;
-        if (bundle != null)
+        string path = BundlePath;
+        if (LoadBundle())
         {
-            foreach (Shader shader in bundle.LoadAllAssets<Shader>())
+            foreach (Shader shader in _bundleShaders.Values)
             {
                 if (shader.name == "Justachae/FPANO/Outline")
                     _shader = shader;
