@@ -49,9 +49,14 @@ LIGHT_ITEMS = {
         # the user's list: red and white
         dict(light='spot', lightColor=RED, intensity=0.5, range=10.0, angle=80.0),
         dict(light='spot', lightColor=WHITE, intensity=0.5, range=12.0, angle=80.0)]},
+    # CORE Survival HEL-STAR Rail Strobe (the RAILINK one; the model's board reads "IR VIS"): IR or visible, each dim or
+    # bright; the client flashes the "strobe_light"s (both strobes together, as the user's videos) and draws the lens
+    # glow at "strobe_lens" (facing out of the strobe, local +z)
     'strobe': {'mesh': 'fpano_light_strobe_L', 'turn': False, 'front': 'out', 'modes': [
-        dict(light='point', lightColor=WHITE, intensity=2.0, range=12.0, angle=0.0, strobe=True),
-        dict(light='point', lightColor=[1, 0, 0, 1], intensity=2.0, range=25.0, angle=0.0, ir=True, strobe=True)]},
+        dict(light='point', lightColor=[1, 0, 0, 1], intensity=1.2, range=12.0, angle=0.0, ir=True, strobe=True),
+        dict(light='point', lightColor=[1, 0, 0, 1], intensity=2.5, range=30.0, angle=0.0, ir=True, strobe=True),
+        dict(light='point', lightColor=WHITE, intensity=1.0, range=6.0, angle=0.0, strobe=True),
+        dict(light='point', lightColor=WHITE, intensity=2.5, range=15.0, angle=0.0, strobe=True)]},
 }
 LIGHT_SLOTS = {'hl2a': ('mod_flashlight_000', 'mod_flashlight_001'), 'strobe': ('mod_tactical_000', 'mod_tactical_001')}
 
@@ -189,6 +194,10 @@ def light_items(out, rails):
         else:                                          # the strobe's dome: outward (-x on the left side) and up
             lens = V[V[:, 1] > V[:, 1].max() - 0.004]; at = lens.mean(0) + [0, 0.004, 0]
             aim = np.eye(4)
+        if kind == 'strobe':                           # the lens: on the dome, facing out of the strobe (-x on the left)
+            L = np.eye(4); L[:3, 3] = at
+            L[:3, :3] = np.column_stack([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])   # local +z = -x
+            ns.append(node('strobe_lens', '', L))
         ns.append(node('mode_000', '', np.eye(4)))
         for k, mode in enumerate(spec['modes'], 1):
             m = np.eye(4); m[:3, :3] = aim[:3, :3]; m[:3, 3] = at
