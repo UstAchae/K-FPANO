@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.38";
+    public const string Version = "0.2.39";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -867,8 +867,34 @@ internal static class EnvgFusion
     // Our white phosphor material where the game's night vision goes: SSAAPropagator's night-vision material, which it
     // blits over the HDR frame before tone mapping. Set before the frame (the post-processing builds its buffers in the
     // camera's pre-cull) and again right after the game's NightVision clears it in its own pre-cull.
+    // The game's SSAAPropagator blits its night-vision material whenever it has one, and the thermal one (the T-7) only
+    // when it has none. The game clears it from its NightVision (each pre-cull while off, and when disabled); once that
+    // component is off (another device worn, the T-7 down) nothing clears ours. So it is handed back as soon as we stop:
+    // the game's own while its night vision is on, else none.
+    private static SSAAPropagator? _wpPropagator;
+    private static bool _loggedWpBack;
+    private static readonly HarmonyLib.AccessTools.FieldRef<SSAAPropagator, Material> PropagatorNv =
+        HarmonyLib.AccessTools.FieldRefAccess<SSAAPropagator, Material>("_nightVisionMaterial");
+    private static void ReleaseWhitePhosphor()
+    {
+        SSAAPropagator? propagator = _wpPropagator;
+        _wpPropagator = null;
+        if (propagator == null || _i2Material == null || PropagatorNv(propagator) != _i2Material)
+            return;
+        var nv = propagator.GetComponent<BSG.CameraEffects.NightVision>();
+        propagator.SetNightVisionMaterial(nv != null && nv.enabled && nv.On ? nv.Material : null);
+        if (!_loggedWpBack)
+        {
+            _loggedWpBack = true;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO white phosphor taken off " + propagator.name + " (" + (nv != null && nv.enabled && nv.On ? "the game's night vision back" : "no night vision: thermal sights work") + ")");
+        }
+    }
+
     internal static void SetWhitePhosphor()
     {
+        // (the device up, off or not worn: ours off the camera)
+        if (_wpPropagator != null && (!WhitePhosphorOn || _main == null || _wpPropagator.gameObject != _main.gameObject))
+            ReleaseWhitePhosphor();
         // (another device's own night vision is left alone; the F-PANO's tubes are the white phosphor's)
         if (!WhitePhosphorOn || _main == null || (GameNightVisionOn(_main) && !EnvgbDown) || EyepieceLink.ClaimedRecently)
             return;
@@ -880,6 +906,7 @@ internal static class EnvgFusion
         _i2Material!.SetVector(I2Id, new Vector4(100f * (EnvgFusionPlugin.TubeBrightness?.Value ?? 1f) * I2Gain, EnvgFusionPlugin.I2Noise?.Value ?? 1f, 0f, 1.5f));
         _i2Material.SetVector(I2TimeId, new Vector4(Mathf.Floor(Time.time * 30f) % 1024f, abc ? 1f : 0f, 0f, 0f));
         propagator.SetNightVisionMaterial(_i2Material);
+        _wpPropagator = propagator;
         if (!_loggedI2)
         {
             _loggedI2 = true;

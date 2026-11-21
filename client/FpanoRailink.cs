@@ -674,9 +674,9 @@ internal static class FpanoRailink
                 return slot;
         return null;
     }
-    // that slot holds an F-PANO other than this item
-    private static bool HoldsOther(EFT.InventoryLogic.Slot? slot, EFT.InventoryLogic.Item item) =>
-        slot?.ContainedItem != null && !ReferenceEquals(slot.ContainedItem, item) && NeedsRails(slot.ContainedItem);
+    // that slot holds anything other than this item
+    private static bool HoldsAnyOther(EFT.InventoryLogic.Slot? slot, EFT.InventoryLogic.Item item) =>
+        slot?.ContainedItem != null && !ReferenceEquals(slot.ContainedItem, item);
 
     // ---- the rules: one F-PANO a helmet (its own mod_nvg or the rails' one, not both); with the rails, adapters only on
     // their two mounts ----
@@ -687,18 +687,20 @@ internal static class FpanoRailink
             if (ignoreRestrictions || __result.Failed || item == null || __instance == null)
                 return;
             bool second = false;
-            if (__instance.ID == "mod_nvg" && NeedsRails(item))
+            // (the rails' F-PANO sits where the helmet's own mod_nvg holds its device: a TATM and the like are allowed with
+            // the rails, but not together with an F-PANO on them)
+            if (__instance.ID == "mod_nvg")
             {
                 EFT.InventoryLogic.Item? holder = __instance.ParentItem;
                 second = IsRails(holder)
-                    ? HoldsOther(SlotNamed(holder!.CurrentAddress?.Container?.ParentItem, "mod_nvg"), item)   // onto the rails: the helmet's own
-                    : HoldsOther(SlotNamed(RailsOn(holder, out _), "mod_nvg"), item);                      // onto the helmet: its rails'
+                    ? HoldsAnyOther(SlotNamed(holder!.CurrentAddress?.Container?.ParentItem, "mod_nvg"), item)   // onto the rails: the helmet's own
+                    : HoldsAnyOther(SlotNamed(RailsOn(holder, out _), "mod_nvg"), item);                      // onto the helmet: its rails'
             }
             else if (IsRails(item))
             {
-                // rails carrying an F-PANO onto a helmet that has one
+                // rails carrying an F-PANO onto a helmet whose own mod_nvg holds something
                 EFT.InventoryLogic.Item? carried = SlotNamed(item, "mod_nvg")?.ContainedItem;
-                second = carried != null && NeedsRails(carried) && HoldsOther(SlotNamed(__instance.ParentItem, "mod_nvg"), carried);
+                second = carried != null && HoldsAnyOther(SlotNamed(__instance.ParentItem, "mod_nvg"), carried);
             }
             // the adapters: with the rails on, only their two mounts (left, right) take one; the helmet's own mod_mount
             // sits on its hidden rail under one of them, so it takes nothing, and rails don't go onto a helmet whose own
@@ -712,7 +714,7 @@ internal static class FpanoRailink
                 return;
             __result = new EFT.InventoryLogic.Slot.ItemFiltersWontAllowError(item, __instance);
             if (_logged.Add(second ? "refused-second" : "refused-mount"))
-                EnvgFusionPlugin.Log?.LogInfo(second ? "F-PANO RAILINK: a second F-PANO on one helmet refused"
+                EnvgFusionPlugin.Log?.LogInfo(second ? "F-PANO RAILINK: the rails' F-PANO and the helmet's own mod_nvg together refused (one device at the helmet's front)"
                     : "F-PANO RAILINK: the helmet's own mod_mount and the RAILINK together refused (adapters go on the RAILINK's two mounts)");
         }
         catch (System.Exception) { }
@@ -882,10 +884,19 @@ internal static class FpanoRailink
         return n + " renderers, bounds " + (any ? all.size.ToString("F3") + " around " + (all.center - root.position).ToString("F3") + " from the root" : "none");
     }
 
-    // ---- the rails' icon with an F-PANO on their mod_nvg: the prefab's framing is for the rails alone and cut the
-    // lenses off; fitted on the real outlines (rails + goggle, cable plugged) for each of the goggle's two positions.
-    // The prefab's own values back without a goggle (the pool reuses the model) ----
+    // ---- the rails' icon with anything on them (an F-PANO up or down, a headset, lights, strobes): the prefab's framing
+    // is for the rails alone (cut the lenses off, too big with a headset). The game frames the union of the active
+    // renderers' boxes (B, as WeaponPreview.GetBounds) turned by Icon.rotation, its size B.extents.y / boundsScale (or
+    // B.extents.x / aspect when wider); so the real outline (every vertex turned the same way; a box for a mesh that is
+    // not readable) is taken once and boundsScale and the offset set to fill the cell with a small margin (as the item's
+    // editor IconFraming.Fit). Cached by what is on the rails. The prefab's own values back with nothing on them (the
+    // pool reuses the model) ----
+    private const float IconMargin = 1.06f, IconAspect = 2f;
     private static readonly Dictionary<int, (Vector3 pos, bool offset, float scale)> _iconPrefab = new Dictionary<int, (Vector3, bool, float)>();
+    private static readonly Dictionary<string, (Vector3 pos, float scale)> _iconFits = new Dictionary<string, (Vector3, float)>();
+    private static readonly List<Renderer> _iconRenderers = new List<Renderer>();
+    private static readonly System.Text.StringBuilder _iconKey = new System.Text.StringBuilder(256);
+    private static Mesh? _baked;
     private static void IconFraming(Transform rails, EFT.InventoryLogic.Item railsItem)
     {
         PreviewPivot? pivot = rails.GetComponent<PreviewPivot>();
@@ -894,22 +905,119 @@ internal static class FpanoRailink
         int id = pivot.GetInstanceID();
         if (!_iconPrefab.TryGetValue(id, out var own))
             _iconPrefab[id] = own = (pivot.Icon.position, pivot.Icon.hasOffset, pivot.Icon.boundsScale);
-        EFT.InventoryLogic.Item? goggle = null;
-        if (railsItem is EFT.InventoryLogic.CompoundItem compound && compound.Slots != null)
-            foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
-                if (slot != null && slot.ID == "mod_nvg" && slot.ContainedItem != null && Kind(slot.ContainedItem) == 3)
-                    goggle = slot.ContainedItem;
-        if (goggle == null)
+        // what is on the rails (and the goggle's position)
+        _iconKey.Clear();
+        _iconKey.Append(railsItem.TemplateId.ToString());
+        if (!KeyContents(railsItem))
         {
             pivot.Icon.position = own.pos;
             pivot.Icon.hasOffset = own.offset;
             pivot.Icon.boundsScale = own.scale;
             return;
         }
-        bool down = goggle.GetItemComponent<EFT.InventoryLogic.TogglableComponent>()?.On ?? false;
-        pivot.Icon.boundsScale = down ? 1.1204f : 1.0348f;
-        pivot.Icon.position = down ? new Vector3(0.01557f, -0.00680f, 0f) : new Vector3(0.00498f, -0.01048f, 0f);
+        string key = _iconKey.ToString();
+        if (!_iconFits.TryGetValue(key, out var fit))
+        {
+            fit = FitIcon(rails, pivot.Icon.rotation);
+            _iconFits[key] = fit;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: icon framed for " + key + ": boundsScale " + fit.scale.ToString("F4") + ", offset " + fit.pos.ToString("F4"));
+        }
+        if (fit.scale <= 0f)
+            return;
+        pivot.Icon.boundsScale = fit.scale;
+        pivot.Icon.position = fit.pos;
         pivot.Icon.hasOffset = true;
+    }
+
+    // what is in this item's slots, all the way down, onto the key; whether anything
+    private static bool KeyContents(EFT.InventoryLogic.Item item)
+    {
+        bool any = false;
+        if (item is EFT.InventoryLogic.CompoundItem compound && compound.Slots != null)
+            foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+            {
+                EFT.InventoryLogic.Item? inside = slot?.ContainedItem;
+                if (inside == null)
+                    continue;
+                any = true;
+                _iconKey.Append('|').Append(slot!.ID).Append('=').Append(inside.TemplateId.ToString());
+                if (inside.GetItemComponent<EFT.InventoryLogic.TogglableComponent>()?.On == true)
+                    _iconKey.Append('+');
+                KeyContents(inside);
+            }
+        return any;
+    }
+
+    private static (Vector3 pos, float scale) FitIcon(Transform root, Quaternion rotation)
+    {
+        Vector3 keepPos = root.position;
+        Quaternion keepRot = root.rotation;
+        try
+        {
+            root.SetPositionAndRotation(Vector3.zero, rotation);
+            root.GetComponentsInChildren(false, _iconRenderers);
+            bool hasB = false, hasT = false;
+            Bounds B = default, T = default;
+            foreach (Renderer r in _iconRenderers)
+            {
+                if (r.name.Contains("linza"))
+                    continue;
+                Bounds rb = r.bounds;
+                if (rb.extents == Vector3.zero)
+                    continue;
+                if (!hasB) { B = rb; hasB = true; } else B.Encapsulate(rb);
+                // the real outline
+                Mesh? mesh = null;
+                Matrix4x4 w = r.transform.localToWorldMatrix;
+                if (r is SkinnedMeshRenderer skin)
+                {
+                    if (skin.sharedMesh != null && skin.sharedMesh.isReadable)
+                    {
+                        _baked ??= new Mesh { name = "Justachae RAILINK icon bake" };
+                        skin.BakeMesh(_baked, true);
+                        mesh = _baked;
+                        w = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
+                    }
+                }
+                else
+                {
+                    MeshFilter? f = r.GetComponent<MeshFilter>();
+                    if (f != null && f.sharedMesh != null && f.sharedMesh.isReadable)
+                        mesh = f.sharedMesh;
+                }
+                if (mesh != null)
+                {
+                    Vector3[] v = mesh.vertices;
+                    for (int i = 0; i < v.Length; i++)
+                    {
+                        Vector3 pt = w.MultiplyPoint3x4(v[i]);
+                        if (!hasT) { T = new Bounds(pt, Vector3.zero); hasT = true; } else T.Encapsulate(pt);
+                    }
+                }
+                else
+                {
+                    // (a game mesh not readable: its box)
+                    if (!hasT) { T = rb; hasT = true; } else T.Encapsulate(rb);
+                }
+            }
+            _iconRenderers.Clear();
+            if (!hasB || !hasT || T.extents.y <= 0f)
+                return (Vector3.zero, 0f);
+            float baseSize = B.extents.x / Mathf.Max(B.extents.y, 1e-6f) > IconAspect ? B.extents.x / IconAspect : B.extents.y;
+            float need = Mathf.Max(T.extents.y, T.extents.x / IconAspect) * IconMargin;
+            Vector3 off = B.center - T.center;
+            return (new Vector3(off.x, off.y, 0f), baseSize / Mathf.Max(need, 1e-6f));
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: icon framing failed: " + e.Message);
+            return (Vector3.zero, 0f);
+        }
+        finally
+        {
+            _iconRenderers.Clear();
+            root.SetPositionAndRotation(keepPos, keepRot);
+        }
     }
 
     // a model made on its own (an icon, loot, the inspect window): the rails as the prefab has them, cables to their own
