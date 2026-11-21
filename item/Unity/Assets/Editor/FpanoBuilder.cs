@@ -16,7 +16,7 @@ public static class FpanoBuilder {
  const string Src="Assets/Source",Gen="Assets/Generated";
  static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
  public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
- [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin,sideSkin,hidden;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;public string light;public float[] lightColor;public float intensity,range,angle;public bool ir;}
+ [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot,scale;public bool skin,sideSkin,hidden;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;public string light;public float[] lightColor;public float intensity,range,angle;public bool ir;}
  [Serializable] public class Info {public string colour,item,root;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
 
  const float RotationSpeed=0.75187969f;  // the GPNVG-18's
@@ -93,7 +93,7 @@ public static class FpanoBuilder {
   var renderers=new List<Renderer>();
   foreach(var n in info.nodes){
    var go=new GameObject(n.name);go.transform.SetParent(n.parent==""?root.transform:made[n.parent],false);
-   go.transform.localPosition=V(n.pos);go.transform.localRotation=Q(n.rot);made[n.name]=go.transform;
+   go.transform.localPosition=V(n.pos);go.transform.localRotation=Q(n.rot);if(n.scale!=null&&n.scale.Length==3)go.transform.localScale=V(n.scale);made[n.name]=go.transform;  // scale: the rails' mirrored right-side light slots
    if(n.sideSkin){
     // A RAILINK rail mesh (prepare.py SIDE_*): bones group, left, right; a vertex goes with its side's bone past
     // sideTo in |x|, with the group within sideFrom, smooth between. Mesh in the group's frame (identity on the root).

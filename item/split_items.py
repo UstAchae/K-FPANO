@@ -31,12 +31,11 @@ HEADSETS = [(['5a16b9fffcdbcb0176308b34'], FAST_TPL, FAST, 'mod_equipment_001'),
 ITEMS = {'rails': 'fpano_railink_rails', 'battery': 'fpano_railink_battery', 'mount': 'nvg_fpano_mount', 'goggle': 'nvg_fpano',
          'hl2a': 'fpano_light_hl2a', 'mpls': 'fpano_light_mpls', 'strobe': 'fpano_light_strobe'}
 # The RAILINK lights (user: "做成 2", separate light items on the rails). Each is laid out for the LEFT side, where the
-# model has the HL2-A and a strobe; the MPLS (model: right front) is turned 180 deg about the forward axis (z) into it.
-# The rails' right-side slots are their left ones turned the same way, so a light sits exactly as the model has it on
-# its own side and turned over on the other. Modes (the game's TacticalComboVisualController: mode_000 = off, mode_00k
+# model has the HL2-A and a strobe; the MPLS (model: right front) is mirrored into it. The rails' right-side slots are
+# the left ones mirrored (scale -1 in x), so a light on the right is the mirror image of it on the left, at the same
+# height (0.2.17 turned them 180 deg about the forward axis, which put the right strobe 10 cm low: user, in game). Modes (the game's TacticalComboVisualController: mode_000 = off, mode_00k
 # with its lights): white light as the game's flashlights (spot, shadows); IR as the game's IR illuminators (IkLight:
 # seen only through night vision); the strobes' lights are named strobe_light (the client flashes them).
-RZ = np.diag([-1.0, -1.0, 1.0, 1.0])
 WHITE, RED, GREEN, BLUE = [1, 1, 1, 1], [1, 0.12, 0.08, 1], [0.15, 1, 0.25, 1], [0.2, 0.35, 1, 1]
 LIGHT_ITEMS = {
     'hl2a': {'mesh': 'fpano_light_hl2a', 'turn': False, 'front': 'z', 'modes': [
@@ -45,7 +44,7 @@ LIGHT_ITEMS = {
         dict(light='spot', lightColor=[1, 0, 0, 1], intensity=1.2, range=65.0, angle=50.0, ir=True),
         dict(light='spot', lightColor=WHITE, intensity=0.6, range=25.0, angle=60.0),
         dict(light='spot', lightColor=WHITE, intensity=1.3, range=55.0, angle=60.0)]},
-    'mpls': {'mesh': 'fpano_light_mpls', 'turn': True, 'front': 'z', 'modes': [
+    'mpls': {'mesh': 'fpano_light_mpls', 'turn': True, 'front': 'z', 'modes': [   # turn: mirrored into the left side
         # the user's list: red and white
         dict(light='spot', lightColor=RED, intensity=0.5, range=10.0, angle=80.0),
         dict(light='spot', lightColor=WHITE, intensity=0.5, range=12.0, angle=80.0)]},
@@ -53,10 +52,11 @@ LIGHT_ITEMS = {
     # bright; the client flashes the "strobe_light"s (both strobes together, as the user's videos) and draws the lens
     # glow at "strobe_lens" (facing out of the strobe, local +z)
     'strobe': {'mesh': 'fpano_light_strobe_L', 'turn': False, 'front': 'out', 'modes': [
-        dict(light='point', lightColor=[1, 0, 0, 1], intensity=1.2, range=12.0, angle=0.0, ir=True, strobe=True),
-        dict(light='point', lightColor=[1, 0, 0, 1], intensity=2.5, range=30.0, angle=0.0, ir=True, strobe=True),
-        dict(light='point', lightColor=WHITE, intensity=1.0, range=6.0, angle=0.0, strobe=True),
-        dict(light='point', lightColor=WHITE, intensity=2.5, range=15.0, angle=0.0, strobe=True)]},
+        # a marker, not a lamp: it lights only what is close (0.2.17's lit the whole player: user, "闪的还很浮夸")
+        dict(light='point', lightColor=[1, 0, 0, 1], intensity=0.4, range=3.0, angle=0.0, ir=True, strobe=True),
+        dict(light='point', lightColor=[1, 0, 0, 1], intensity=0.8, range=6.0, angle=0.0, ir=True, strobe=True),
+        dict(light='point', lightColor=WHITE, intensity=0.25, range=1.5, angle=0.0, strobe=True),
+        dict(light='point', lightColor=WHITE, intensity=0.5, range=3.0, angle=0.0, strobe=True)]},
 }
 LIGHT_SLOTS = {'hl2a': ('mod_flashlight_000', 'mod_flashlight_001'), 'strobe': ('mod_tactical_000', 'mod_tactical_001')}
 
@@ -172,35 +172,52 @@ def split(out, info):
     return {k: [n['name'] for n in v] for k, v in (('rails', rails), ('battery', battery), ('mount', mount), ('goggle', goggle), *lights.items())}
 
 
+def mirror_bin(src, dst):
+    """A mesh file mirrored in x (positions, normals; triangle winding reversed), uvs kept."""
+    with open(src, 'rb') as f:
+        nv, nt, ns = np.fromfile(f, np.int32, 3)
+        V = np.fromfile(f, np.float32, nv * 3).reshape(-1, 3); N = np.fromfile(f, np.float32, nv * 3).reshape(-1, 3)
+        U = np.fromfile(f, np.float32, nv * 2); ni = np.fromfile(f, np.int32, 1)[0]; T = np.fromfile(f, np.int32, ni).reshape(-1, 3)
+    V = V.copy(); N = N.copy(); V[:, 0] *= -1; N[:, 0] *= -1; T = T[:, [0, 2, 1]].copy()
+    with open(dst, 'wb') as f:
+        np.array([nv, nt, ns], np.int32).tofile(f); V.tofile(f); N.tofile(f); U.tofile(f)
+        np.array([T.size], np.int32).tofile(f); T.astype(np.int32).tofile(f)
+
+
 def light_items(out, rails):
     """The light items' node lists (in their root frame: the left-side mount point of their kind), and the rails' slots
-    for them (appended to `rails`): left on fpano_railink_L at that point, right on fpano_railink_R turned by RZ."""
+    for them (appended to `rails`): left on fpano_railink_L at that point, right on fpano_railink_R its mirror image."""
     Gi = np.linalg.inv(G)
     centre = lambda name: (lambda v: (v.min(0) + v.max(0)) / 2)(read_bin(out / f'{name}.bin')[0])
     points = {'hl2a': centre('fpano_light_hl2a'), 'strobe': centre('fpano_light_strobe_L')}   # each kind's mount point
     points['mpls'] = points['hl2a']
     for kind, (left, right) in LIGHT_SLOTS.items():
         c = points[kind]; L = np.eye(4); L[:3, 3] = c
-        rails.append(node(left, 'fpano_railink_L', L @ Gi)); rails.append(node(right, 'fpano_railink_R', RZ @ L @ Gi))
+        rails.append(node(left, 'fpano_railink_L', L @ Gi))
+        # mirror S L Gi S = T(Sc) Gi S (Gi turns about x, which S keeps): position mirrored, rotation Gi, scale (-1,1,1);
+        # the game's turn G on the light's root commutes with S too, so the light is the mirror image of the left one
+        rails.append(dict(node(right, 'fpano_railink_R', L @ Gi), pos=[float(-c[0]), float(c[1]), float(c[2])], scale=[-1.0, 1.0, 1.0]))
     items = {}
     for kind, spec in LIGHT_ITEMS.items():
-        v = read_bin(out / f"{spec['mesh']}.bin")[0]
-        place = (RZ if spec['turn'] else np.eye(4)).copy(); place[:3, 3] -= points[kind]   # mesh (root frame) -> item frame
-        V = v @ place[:3, :3].T + place[:3, 3]
-        ns = [node(spec['mesh'], '', place, mesh=spec['mesh'], mat='strobe' if kind == 'strobe' else kind)]
+        mesh = spec['mesh']
+        if spec['turn']:                               # mirrored into the left side
+            mirror_bin(out / f'{mesh}.bin', out / f'{mesh}_L.bin'); mesh += '_L'
+        v = read_bin(out / f"{mesh}.bin")[0]
+        place = np.eye(4); place[:3, 3] -= points[kind]   # mesh (root frame, left side) -> item frame
+        V = v + place[:3, 3]
+        ns = [node(mesh, '', place, mesh=mesh, mat='strobe' if kind == 'strobe' else kind)]
         if spec['front'] == 'z':                       # the lens: the front-most vertices; the beam straight ahead
             lens = V[V[:, 2] > V[:, 2].max() - 0.002]; at = np.r_[lens[:, :2].mean(0), V[:, 2].max() + 0.002]
-            aim = np.eye(4)
-        else:                                          # the strobe's dome: outward (-x on the left side) and up
-            lens = V[V[:, 1] > V[:, 1].max() - 0.004]; at = lens.mean(0) + [0, 0.004, 0]
-            aim = np.eye(4)
-        if kind == 'strobe':                           # the lens: on the dome, facing out of the strobe (-x on the left)
             L = np.eye(4); L[:3, 3] = at
-            L[:3, :3] = np.column_stack([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])   # local +z = -x
+            ns.append(node('lamp_lens', '', L))        # where the client draws the lamp's own glow, facing +z
+        else:                                          # the strobe: its lens is the outer face of the clear housing
+            at = np.r_[V[:, 0].min() - 0.001, (V[:, 1].min() + V[:, 1].max()) / 2, (V[:, 2].min() + V[:, 2].max()) / 2]
+            L = np.eye(4); L[:3, 3] = at
+            L[:3, :3] = np.column_stack([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])   # local +z = -x, out of the strobe
             ns.append(node('strobe_lens', '', L))
         ns.append(node('mode_000', '', np.eye(4)))
         for k, mode in enumerate(spec['modes'], 1):
-            m = np.eye(4); m[:3, :3] = aim[:3, :3]; m[:3, 3] = at
+            m = np.eye(4); m[:3, 3] = at
             ns.append(node(f'mode_{k:03d}', '', np.eye(4)))
             ns.append(node('strobe_light' if mode.get('strobe') else f'light_{k:03d}', f'mode_{k:03d}', m,
                            **{**{kk: vv for kk, vv in mode.items() if kk != 'strobe'}, 'ir': bool(mode.get('ir'))}))
