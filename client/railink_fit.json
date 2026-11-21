@@ -19,12 +19,12 @@
   "prefab": "assets/content/items/equipment/helmet_opscore_fast/item_equipment_helmet_opscore_fast_black.bundle",
   "shape": "helmet_opscore_fast",
   "left": [
-   -0.0137,
+   -0.0088,
    0.0,
    0.0
   ],
   "right": [
-   0.0106,
+   0.0066,
    0.0,
    0.0
   ],
@@ -124,12 +124,12 @@
   "prefab": "assets/content/items/equipment/helmet_opscore_fast/item_equipment_helmet_opscore_fast_tan.bundle",
   "shape": "helmet_opscore_fast",
   "left": [
-   -0.0137,
+   -0.0088,
    0.0,
    0.0
   ],
   "right": [
-   0.0106,
+   0.0066,
    0.0,
    0.0
   ],
@@ -229,12 +229,12 @@
   "prefab": "assets/content/items/equipment/helmet_crye_airframe/item_equipment_helmet_crye_airframe_tan.bundle",
   "shape": "helmet_crye_airframe",
   "left": [
-   -0.0206,
+   -0.0133,
    0.0,
    0.0
   ],
   "right": [
-   0.0208,
+   0.0122,
    0.0,
    0.0
   ],
@@ -264,12 +264,12 @@
   "prefab": "assets/content/items/equipment/helmet_mich2001/item_equipment_helmet_mich2001_od.bundle",
   "shape": "helmet_mich2001",
   "left": [
-   -0.0254,
+   -0.0162,
    0.0,
    0.0
   ],
   "right": [
-   0.0228,
+   0.0121,
    0.0,
    0.0
   ],
@@ -299,12 +299,12 @@
   "prefab": "assets/content/items/equipment/helmet_mich2002/item_equipment_helmet_mich2002_od.bundle",
   "shape": "helmet_mich2002",
   "left": [
-   -0.0188,
+   -0.0106,
    0.0,
    0.0
   ],
   "right": [
-   0.0144,
+   0.0098,
    0.0,
    0.0
   ],
@@ -369,12 +369,12 @@
   "prefab": "assets/content/items/equipment/helmet_team_wendy_exfil/item_equipment_helmet_team_wendy_exfil_black.bundle",
   "shape": "helmet_team_wendy_exfil",
   "left": [
-   -0.0415,
+   -0.0342,
    0.0,
    0.0
   ],
   "right": [
-   0.0362,
+   0.0293,
    0.0,
    0.0
   ],
@@ -404,12 +404,12 @@
   "prefab": "assets/content/items/equipment/helmet_team_wendy_exfil/item_equipment_helmet_team_wendy_exfil_coyote.bundle",
   "shape": "helmet_team_wendy_exfil",
   "left": [
-   -0.0415,
+   -0.0342,
    0.0,
    0.0
   ],
   "right": [
-   0.0362,
+   0.0293,
    0.0,
    0.0
   ],
@@ -439,12 +439,12 @@
   "prefab": "assets/content/items/equipment/helmet_tc800/item_equipment_helmet_tc800.bundle",
   "shape": "helmet_tc800",
   "left": [
-   -0.0092,
+   0.0003,
    0.0,
    0.0
   ],
   "right": [
-   0.0081,
+   0.0015,
    0.0,
    0.0
   ],
@@ -474,12 +474,12 @@
   "prefab": "assets/content/items/equipment/helmet_hops_core_fast/item_equipment_helmet_hops_core_fast.bundle",
   "shape": "helmet_hops_core_fast",
   "left": [
-   -0.0137,
+   -0.0086,
    0.0,
    0.0
   ],
   "right": [
-   0.0111,
+   0.0066,
    0.0,
    0.0
   ],
@@ -544,12 +544,12 @@
   "prefab": "assets/content/items/equipment/helmet_galvion_caiman/item_equipment_helmet_galvion_caiman.bundle",
   "shape": "helmet_galvion_caiman",
   "left": [
-   -0.0295,
+   -0.0228,
    0.0,
    0.0
   ],
   "right": [
-   0.0277,
+   0.0203,
    0.0,
    0.0
   ],
@@ -649,19 +649,19 @@
   "prefab": "assets/content/items/equipment/helmet_tor_2/item_equipment_helmet_tor_2.bundle",
   "shape": "helmet_tor_2",
   "left": [
-   -0.0399,
+   -0.0295,
    0.0,
    0.0
   ],
   "right": [
-   0.0397,
+   0.0283,
    0.0,
    0.0
   ],
   "back": [
    0.0,
    0.0,
-   -0.029
+   -0.0291
   ]
  },
  "66b5f65ca7f72d197e70bcd6": {
@@ -1034,12 +1034,12 @@
   "prefab": "assets/content/items/equipment/helmet_galvion_caiman/item_equipment_helmet_galvion_caiman_multicam_bp2.bundle",
   "shape": "helmet_galvion_caiman",
   "left": [
-   -0.0295,
+   -0.0228,
    0.0,
    0.0
   ],
   "right": [
-   0.0277,
+   0.0203,
    0.0,
    0.0
   ],
@@ -1069,12 +1069,12 @@
   "prefab": "assets/content/items/equipment/helmet_galvion_caiman/item_equipment_helmet_galvion_caiman_venom_bp2.bundle",
   "shape": "helmet_galvion_caiman",
   "left": [
-   -0.0295,
+   -0.0228,
    0.0,
    0.0
   ],
   "right": [
-   0.0277,
+   0.0203,
    0.0,
    0.0
   ],
