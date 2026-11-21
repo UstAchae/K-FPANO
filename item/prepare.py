@@ -45,18 +45,25 @@ PLATE_Y = -0.003   # the Base plate's centre on the shroud face (root frame), as
 SEAT_GAP = 0.0005
 FLIP_DEG = 160.0  # about the Base hinge: the goggle up against the helmet front (165 touched it)
 TEX_SIZE = 2048
-# Eyepiece glass. The model's own lens is one flat pane per side inside the oval eyecup (plane y -0.1401, x
-# 0.0144..0.0407, rounded on the inner side only, textured dark), over a flat opaque cap (y -0.1426) that fills
-# the eyecup's opening (x 0.0113..0.0557, z 1.6846..1.7193). The real GPNVG-18 / F-PANO eyepiece is a figure-8
-# (the user's reference photo: two equal round lenses side by side, overlapping a little, filling most of the oval):
-# the model's pane is left out (LENS_DROP) and ours put in its plane, its own glass node: two discs of r 13.5 mm
-# per side, 17 mm apart (inner at |x| 0.0250, outer at |x| 0.0420), at the tubes' height z 1.7018, so the pair spans
-# the opening's 44 mm. The right inner disc carries the thermal picture (user: "右数第二个目镜有热轮廓").
-GLASS_Y = -0.1401
-GLASS_Z = 1.7018
-GLASS_R = 0.0135
-GLASS_X = {'inner': 0.0250, 'outer': 0.0420}
-LENS_DROP = dict(y=(-0.1404, -0.1398), ax=(0.0140, 0.0410), z=(1.685, 1.719))  # the model's pane (body, facing +Y)
+# Eyepiece glass. The model's eyepiece window, inside each oval rubber eyecup, is two flat panes meeting at a crease
+# at |x| 0.0407: the inner tube's, flat at y -0.1401 facing the eye (|x| 0.0144..0.0407), and the outer tube's,
+# turned 28.7 deg to face inward (normal (-+0.4796, 0.8775, 0), reaching |x| 0.0645 at the rim), together a
+# 50 x 31.7 mm stadium (z 1.6861..1.7178); textured as flat grey. The real GPNVG-18 / F-PANO eyepiece (the user's
+# reference photos) is a figure-8 of two round lenses, one per tube, overlapping a little. Ours: one domed lens on
+# each pane (r 15.85 mm, half the window's height; 1.2 mm crown), the inner one centred 15.85 mm in from the window's
+# inner end, the outer one 15.85 mm in from its outer end along its pane, both 0.3 mm proud of their pane, so the
+# pair fills the window and meets in a seam over the crease. The panes stay, darkened, behind (LENS_DARK): the
+# figure-8's waist shows dark housing, as on the real goggle. The right inner lens carries the thermal picture
+# (user: "右数第二个目镜有热轮廓").
+PANE_INNER_X = (0.0144, 0.0407)
+PANE_Y = -0.1401
+PANE_Z = (1.6861, 1.7178)
+PANE_OUTER_TILT = np.radians(28.7)
+PANE_OUTER_END = 0.0645
+LENS_R = 0.01585
+LENS_CROWN = 0.0012
+LENS_LIFT = 0.0003
+LENS_DARK_UV = (0.16, 0.64)  # a dark grey texel of the model's own pane paint
 ATLASES = {'body': ('NVG_L3Harris_FPGPNVG', BODY), 'mount': ('NVG_Mount_L3Harris_FPG21', BASE + ARM)}
 
 
@@ -125,12 +132,13 @@ def load(parts, colour, names):
     for n in names:
         d = np.load(parts / f'{n}{COLOURS[colour]}.npz')
         pos, nor, uv = d['pos'].astype(np.float64), d['nor'].astype(np.float64), d['uv']
-        if n == PART:  # leave out the model's own eyepiece panes (see LENS_DROP)
-            c = (pos.reshape(-1, 3, 3).mean(1)) - [COLOUR_SHIFT[colour], 0, 0]; ny = nor.reshape(-1, 3, 3).mean(1)[:, 1]
-            L = LENS_DROP
-            drop = (ny > 0.97) & (c[:, 1] > L['y'][0]) & (c[:, 1] < L['y'][1]) & (np.abs(c[:, 0]) > L['ax'][0]) & (np.abs(c[:, 0]) < L['ax'][1]) & (c[:, 2] > L['z'][0]) & (c[:, 2] < L['z'][1])
-            keep = np.repeat(~drop, 3); pos, nor, uv = pos[keep], nor[keep], uv[keep]
-            print(f"{colour}: the model's eyepiece panes left out: {int(drop.sum())} triangles")
+        if n == PART:  # the model's eyepiece panes, darkened (see LENS_DARK_UV)
+            c = (pos.reshape(-1, 3, 3).mean(1)) - [COLOUR_SHIFT[colour], 0, 0]; nm = nor.reshape(-1, 3, 3).mean(1)
+            ax = np.abs(c[:, 0]); inz = (c[:, 2] > PANE_Z[0] - 0.002) & (c[:, 2] < PANE_Z[1] + 0.002)
+            inner = (nm[:, 1] > 0.97) & (np.abs(c[:, 1] - PANE_Y) < 0.0003) & (ax > PANE_INNER_X[0] - 0.001) & (ax < PANE_INNER_X[1] + 0.001) & inz
+            outer = (np.abs(np.abs(nm[:, 0]) - np.sin(PANE_OUTER_TILT)) < 0.06) & (np.sign(nm[:, 0]) == -np.sign(c[:, 0])) & (np.abs(nm[:, 2]) < 0.06)                     & (c[:, 1] > -0.1405) & (c[:, 1] < -0.1230) & (ax > 0.0405) & (ax < 0.0647) & inz & (nm[:, 1] > 0.85)                     & (np.abs((ax - PANE_INNER_X[1]) * -np.sin(PANE_OUTER_TILT) + (c[:, 1] - PANE_Y) * np.cos(PANE_OUTER_TILT)) < 0.0026)
+            dark = np.repeat(inner | outer, 3); uv = uv.copy(); uv[dark] = LENS_DARK_UV
+            print(f"{colour}: the model's eyepiece panes darkened: {int(inner.sum())} inner, {int(outer.sum())} outer triangles")
         p, nr = to_device(colour, pos), mirror(nor)
         idx = np.arange(len(p)).reshape(-1, 3)[:, [0, 2, 1]].ravel()  # the mirror reverses the winding
         P.append(p[idx]); N.append(nr[idx]); U.append(uv[idx])
@@ -222,46 +230,56 @@ def textures(tex, colour, out):
         save('normal', normal)
 
 
-def figure8(side):
-    """Triangle corners (model frame) of one eyepiece's figure-8 glass, facing the eye (+Y); side +1 or -1 (x sign)."""
-    ci, co = side * GLASS_X['inner'], side * GLASS_X['outer']
-    mid = (ci + co) / 2
-    a = np.linspace(0, 2 * np.pi, 160, endpoint=False)
-    # the union's outline seen from its midpoint: for each direction the farther of the two circles' boundaries
-    out = []
-    for t in a:
-        d = np.array([np.cos(t), np.sin(t)])
-        best = 0.0
-        for c in (ci, co):
-            o = np.array([mid - c, 0.0])  # ray start relative to the circle's centre
-            b = o @ d; disc = b * b - (o @ o - GLASS_R ** 2)
-            if disc >= 0: best = max(best, -b + np.sqrt(disc))
-        out.append((mid + d[0] * best, GLASS_Z + d[1] * best))
-    out = np.array(out); P = []
-    for i in range(len(out)):
-        j = (i + 1) % len(out)
-        for x, z in ((mid, GLASS_Z), (out[j][0], out[j][1]), (out[i][0], out[i][1])):
-            P.append((x, GLASS_Y, z))
-    P = np.array(P)
-    # wind each triangle to face +Y (the eye)
-    T = P.reshape(-1, 3, 3)
-    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])[:, 1]
-    T[n < 0] = T[n < 0][:, [0, 2, 1]]
-    return T.reshape(-1, 3)
+def lens_frames(side):
+    """(centre, normal, in-plane x axis) of the inner and outer lens of one eyepiece, model frame; side +1 or -1."""
+    zc = (PANE_Z[0] + PANE_Z[1]) / 2
+    inner = (np.array([side * (PANE_INNER_X[0] + LENS_R), PANE_Y, zc]), np.array([0.0, 1.0, 0.0]), np.array([side * 1.0, 0, 0]))
+    t = PANE_OUTER_TILT
+    along = np.array([side * np.cos(t), np.sin(t), 0.0])       # up the outer pane, away from the crease
+    crease = np.array([side * PANE_INNER_X[1], PANE_Y, zc])
+    width = (PANE_OUTER_END - PANE_INNER_X[1]) / np.cos(t)     # the pane's width along itself
+    outer = (crease + along * (width - LENS_R), np.array([-side * np.sin(t), np.cos(t), 0.0]), along)
+    return {'inner': inner, 'outer': outer}
+
+
+def dome(centre, normal, ax, rings=14, segs=72):
+    """Triangle corners and smooth normals of a shallow spherical cap: radius LENS_R, crown LENS_CROWN, on the
+    plane through `centre` with `normal`, lifted LENS_LIFT off it."""
+    ay = np.cross(normal, ax); ay /= np.linalg.norm(ay)
+    R = (LENS_R ** 2 + LENS_CROWN ** 2) / (2 * LENS_CROWN)    # the sphere's radius
+    def pt(r, a):
+        h = np.sqrt(R * R - r * r) - (R - LENS_CROWN)          # height over the rim
+        p = centre + normal * (LENS_LIFT + h) + LENS_R * 0 + r * (np.cos(a) * ax + np.sin(a) * ay)
+        sph = centre + normal * (LENS_LIFT + LENS_CROWN - R)   # the sphere's centre
+        n = p - sph; return p, n / np.linalg.norm(n)
+    P, N = [], []
+    rs = np.linspace(0, LENS_R, rings + 1); As = np.linspace(0, 2 * np.pi, segs + 1)
+    for i in range(rings):
+        for k in range(segs):
+            a = [pt(rs[i], As[k]), pt(rs[i + 1], As[k]), pt(rs[i + 1], As[k + 1]), pt(rs[i], As[k + 1])]
+            for tri in ((0, 1, 2), (0, 2, 3)):
+                if i == 0 and tri == (0, 2, 3): continue
+                c = [a[m] for m in tri]
+                f = np.cross(c[1][0] - c[0][0], c[2][0] - c[0][0])
+                if f @ normal < 0: c = [c[0], c[2], c[1]]
+                for p, n in c: P.append(p); N.append(n)
+    return np.array(P), np.array(N)
 
 
 def glass(colour):
-    """The two eyepieces' glass in the device frame (positions, normals, uvs), and each disc's centre there."""
-    P = np.vstack([figure8(+1), figure8(-1)]) + [COLOUR_SHIFT[colour], 0, 0]
-    p = to_device(colour, P)
-    idx = np.arange(len(p)).reshape(-1, 3)[:, [0, 2, 1]].ravel()  # the mirror reverses the winding
-    p = p[idx]; n = np.tile([0.0, 1.0, 0.0], (len(p), 1)); u = np.zeros((len(p), 2), np.float32)
-    discs = {}
+    """The two eyepieces' figure-8 glass in the device frame (positions, normals, uvs), and each lens's centre and
+    facing there."""
+    P, N = [], []
+    lenses = {}
     for side, name in ((-1, 'right'), (+1, 'left')):  # model -X is the wearer's right
-        for k, x in GLASS_X.items():
-            c = to_device(colour, np.array([[side * x + COLOUR_SHIFT[colour], GLASS_Y, GLASS_Z]]))[0]
-            discs[f'{name}_{k}'] = {'centre': c.round(5).tolist(), 'radius': GLASS_R}
-    return (p, n, u), discs
+        for k, (c, n, ax) in lens_frames(side).items():
+            p, nn = dome(c + [COLOUR_SHIFT[colour], 0, 0], n, ax)
+            P.append(p); N.append(nn)
+            dc = to_device(colour, (c + [COLOUR_SHIFT[colour], 0, 0])[None])[0]
+            lenses[f'{name}_{k}'] = {'centre': dc.round(5).tolist(), 'facing': mirror(n[None])[0].round(4).tolist(), 'radius': LENS_R}
+    p = to_device(colour, np.vstack(P)); n = mirror(np.vstack(N))
+    idx = np.arange(len(p)).reshape(-1, 3)[:, [0, 2, 1]].ravel()  # the mirror reverses the winding
+    return (p[idx], n[idx], np.zeros((len(p), 2), np.float32)), lenses
 
 
 def main(parts, tex):
@@ -278,7 +296,7 @@ def main(parts, tex):
         (out / 'info.json').write_text(json.dumps(info, indent=1))
         if colour == 'fde':
             (ITEM / 'nodes.json').write_text(json.dumps({'nodes': nodes, 'thermalLens': lens.tolist(),
-                                                          'eyepieceDiscs (device frame, the glass faces +Y)': discs}, indent=1))
+                                                          'eyepieceLenses (device frame: centre, facing toward the eye, radius)': discs}, indent=1))
             print('eyepiece discs', discs)
         print(colour, 'thermal lens at', lens.round(4))
         textures(tex, colour, out)

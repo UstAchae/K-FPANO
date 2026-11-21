@@ -91,38 +91,58 @@
   -0.045399999999999996,
   -0.04400000000000004
  ],
- "eyepieceDiscs (device frame, the glass faces +Y)": {
+ "eyepieceLenses (device frame: centre, facing toward the eye, radius)": {
   "right_inner": {
    "centre": [
-    0.025,
+    0.03025,
     0.034,
-    -0.0757
+    -0.07555
    ],
-   "radius": 0.0135
+   "facing": [
+    -0.0,
+    1.0,
+    0.0
+   ],
+   "radius": 0.01585
   },
   "right_outer": {
    "centre": [
-    0.042,
-    0.034,
-    -0.0757
+    0.0506,
+    0.03942,
+    -0.07555
    ],
-   "radius": 0.0135
+   "facing": [
+    -0.4802,
+    0.8771,
+    0.0
+   ],
+   "radius": 0.01585
   },
   "left_inner": {
    "centre": [
-    -0.025,
+    -0.03025,
     0.034,
-    -0.0757
+    -0.07555
    ],
-   "radius": 0.0135
+   "facing": [
+    -0.0,
+    1.0,
+    0.0
+   ],
+   "radius": 0.01585
   },
   "left_outer": {
    "centre": [
-    -0.042,
-    0.034,
-    -0.0757
+    -0.0506,
+    0.03942,
+    -0.07555
    ],
-   "radius": 0.0135
+   "facing": [
+    0.4802,
+    0.8771,
+    0.0
+   ],
+   "radius": 0.01585
   }
  }
 }

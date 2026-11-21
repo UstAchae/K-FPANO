@@ -17,7 +17,7 @@ COLOURS = ('fde', 'blk')
 GLASS = ((0.02, 0.02, 0.022), (1.0, 1.0, 1.0), 3.2, 2.4)  # tint, spec colour, _Glossness, _Specularness
 # The glass has no albedo map, so the shader's default white alpha makes the cubemap reflection ten times the
 # body's (alpha ~0.1): at 0.8 the lenses glowed lilac-white in the dark hideout. A faint blue-violet coating instead.
-GLASS_REFLECT = (0.10, 0.10, 0.14, 1.0)
+GLASS_REFLECT = (0.09, 0.14, 0.13, 1.0)  # the eyepieces' blue-green coating, as in the user's reference photos
 DEPENDENCIES = ['shaders', 'cubemaps']
 OUT = ITEM.parent / 'server'
 
