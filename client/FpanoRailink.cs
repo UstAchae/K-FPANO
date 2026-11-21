@@ -499,7 +499,7 @@ internal static class FpanoRailink
             if (item == null || itemView == null)
                 return;
             if (FpanoStrobe.IsStrobe(item))
-                FpanoStrobe.Attach(itemView);
+                FpanoStrobe.Attach(itemView, item);
             else if (FpanoLamp.IsLamp(item))
                 FpanoLamp.Attach(itemView, item);
             int kind = Kind(item);
@@ -546,7 +546,7 @@ internal static class FpanoRailink
             if (__0 == null || __result == null)
                 return;
             if (FpanoStrobe.IsStrobe(__0))
-                FpanoStrobe.Attach(__result);
+                FpanoStrobe.Attach(__result, __0);
             else if (FpanoLamp.IsLamp(__0))
                 FpanoLamp.Attach(__result, __0);
             int kind = Kind(__0);

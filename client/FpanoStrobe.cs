@@ -115,13 +115,15 @@ internal sealed class FpanoStrobe : MonoBehaviour
     {
         new FpanoGlow.Look { Ir = true, Colour = Color.white * 5f, Size = 0.15f, Shape = new Vector4(0.10f, 0.40f, 0.8f, 0.010f) },
         new FpanoGlow.Look { Ir = true, Colour = Color.white * 14f, Size = 0.30f, Shape = new Vector4(0.10f, 0.45f, 1.2f, 0.010f) },
-        // the dome lit as a tritium dot is: its own size, no halo, below the game's bloom threshold (so not spread)
-        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.45f, Size = 0.007f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
-        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.85f, Size = 0.008f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
+        // the dome lit as a tritium dot is: its own size, no halo, faint (at night the eye's adaptation raises it a
+        // great deal: 0.85 was blinding in the user's night raid)
+        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.05f, Size = 0.006f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
+        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.12f, Size = 0.007f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
     };
 
     private Light[] _lights = new Light[0];
     private GameObject?[] _modes = new GameObject?[0];
+    private EFT.InventoryLogic.LightComponent? _state;   // the strobe's own on / mode (kept by the item wherever it lies)
     private Transform? _lens;
     private MaterialPropertyBlock? _block;
     private int _blockMode = -1;
@@ -133,12 +135,19 @@ internal sealed class FpanoStrobe : MonoBehaviour
         return id == StrobeA || id == StrobeB;
     }
 
-    // on the strobe's model (once; a pooled model keeps it)
-    internal static void Attach(GameObject model)
+    // on the strobe's model (once; a pooled model keeps it, told each time which item it now shows)
+    internal static void Attach(GameObject model, EFT.InventoryLogic.Item item)
     {
-        if (model == null || model.GetComponent<FpanoStrobe>() != null)
+        if (model == null)
             return;
+        FpanoStrobe? had = model.GetComponent<FpanoStrobe>();
+        if (had != null)
+        {
+            had._state = item.GetItemComponent<EFT.InventoryLogic.LightComponent>();
+            return;
+        }
         var strobe = model.AddComponent<FpanoStrobe>();
+        strobe._state = item.GetItemComponent<EFT.InventoryLogic.LightComponent>();
         var found = new System.Collections.Generic.List<Light>();
         foreach (Light light in model.GetComponentsInChildren<Light>(true))
             if (light.gameObject.name == "strobe_light")
@@ -165,7 +174,9 @@ internal sealed class FpanoStrobe : MonoBehaviour
         }
         if (!on || _block == null || _lens == null)
             return;
-        int mode = FpanoGlow.ActiveMode(_modes);
+        // the item's own state (on the head the game shows it on the model too; dropped, the model is left as it was,
+        // but a strobe left on keeps flashing)
+        int mode = _state != null ? (_state.IsActive ? Mathf.Clamp(_state.SelectedMode, 0, Looks.Length - 1) : -1) : FpanoGlow.ActiveMode(_modes);
         if (mode < 0 || Looks[mode].Ir && !FpanoGlow.NightVisionOn())
             return;
         if (mode != _blockMode)
@@ -219,7 +230,6 @@ internal sealed class FpanoLamp : MonoBehaviour
         var lamp = model.AddComponent<FpanoLamp>();
         lamp._looks = id == MpA || id == MpB ? Mpls : Hl2a;
         lamp._modes = FpanoGlow.Modes(model.transform, lamp._looks.Length);
-        FpanoProbe.LampLights.AddRange(model.GetComponentsInChildren<Light>(true));
         lamp._lens = FpanoGlow.FindDeep(model.transform, "lamp_lens");
         if (lamp._lens != null && FpanoGlow.Ready())
             lamp._block = new MaterialPropertyBlock();
