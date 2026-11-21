@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.22";
+    public const string Version = "0.2.23";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -168,6 +168,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
+        FpanoProbe.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
@@ -614,7 +615,9 @@ internal static class EnvgFusion
             || Ridge == null || LitSoft == null || AlbedoSoft == null)
             return;
         _overlayDraw.Clear();
+        _overlayDraw.BeginSample(FpanoProbe.Chain);
         EnvgChain.Fill(_overlayDraw, Material, ChainInput(width, height));
+        _overlayDraw.EndSample(FpanoProbe.Chain);
     }
 
     private static void Blur(CommandBuffer cb, RenderTexture from, RenderTexture to, float step, int width, int height, RenderTexture? across = null)
@@ -649,7 +652,7 @@ internal static class EnvgFusion
             }
             if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
                 return;
-            Graphics.ExecuteCommandBuffer(_overlayDraw);
+            if (!FpanoProbe.NoChain) Graphics.ExecuteCommandBuffer(_overlayDraw);
             RequestHistogram();
             // Drawn the way SSAAImpl draws the frame: its target, the full output as the viewport (the camera's own is
             // still the smaller render size here) and its full-screen mesh, flipped as it flips it.
@@ -719,7 +722,7 @@ internal static class EnvgFusion
         {
             // the chain and the latency ring move on once a frame, however many times the eyepieces ask
             _fusedFrame = Time.frameCount;
-            Graphics.ExecuteCommandBuffer(_overlayDraw);
+            if (!FpanoProbe.NoChain) Graphics.ExecuteCommandBuffer(_overlayDraw);
             RequestHistogram();
             DelayThermal(show);
         }
@@ -759,6 +762,7 @@ internal static class EnvgFusion
         Material.SetVector(ScreenTexelId, new Vector4(1f / Mathf.Max(dest.width, 1) / _crop.z, 1f / Mathf.Max(dest.height, 1) / _crop.w, EnvgFusionPlugin.LineWidth?.Value ?? 1.5f, 0f));
         _fuseDraw ??= new CommandBuffer { name = "Justachae F-PANO into the eyepieces" };
         _fuseDraw.Clear();
+        _fuseDraw.BeginSample(FpanoProbe.Fuse);
         // the tube's picture at the set gain (0: the tubes dark, the thermal picture alone)
         // (handed to the eyepieces for both tubes when they take it; else applied here to the right one)
         EyepieceLink.SetGain(I2Gain);
@@ -773,6 +777,7 @@ internal static class EnvgFusion
         _fuseDraw.SetRenderTarget(dest);
         _fuseDraw.SetViewport(new Rect(0f, 0f, dest.width, dest.height));
         _fuseDraw.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, pass);
+        _fuseDraw.EndSample(FpanoProbe.Fuse);
         Graphics.ExecuteCommandBuffer(_fuseDraw);
         // the screen's own draw keeps the field at the centre
         Material.SetVector(FieldAtId, Vector4.zero);
@@ -1201,7 +1206,9 @@ internal static class EnvgFusion
         }
         try
         {
+            long probeFrom = FpanoProbe.Now;
             RenderThermal(_main);
+            FpanoProbe.AddThermal(probeFrom);
         }
         catch (System.Exception e)
         {
@@ -1396,8 +1403,10 @@ internal static class EnvgFusion
         }
     }
 
+    private static int _probePlayers, _probeRenderers, _probeDraws;
     private static void DrawBodies(CommandBuffer cb)
     {
+        _probePlayers = _probeRenderers = _probeDraws = 0;
         if (BodyMask == null)
             return;
         cb.SetRenderTarget(BodyMask);
@@ -1413,9 +1422,12 @@ internal static class EnvgFusion
         cb.SetRenderTarget(BodyTempId, BuiltinRenderTextureType.CameraTarget);
         cb.ClearRenderTarget(false, true, Color.clear);
         int drawn = 0;
+        _probePlayers = players.Count; _probeRenderers = 0; _probeDraws = 0;
         TrackDeaths(players);
         foreach (EFT.Player player in players)
         {
+            if (FpanoProbe.NoBodies)
+                break;
             // not the one looking: his own head and body sit around the camera (unseen) and would cover the view
             if (player == null || player.PlayerBody == null)
                 continue;
@@ -1439,6 +1451,7 @@ internal static class EnvgFusion
                 for (int sub = 0; sub < subs; sub++)
                     cb.DrawRenderer(renderer, _bodyMaterial, sub, 0);
                 drawn++;
+                _probeRenderers++; _probeDraws += subs;
             }
         }
         // the dead, cooling: their warmth falls toward the air after death (Newton's law), the mask holds how warm
@@ -1554,13 +1567,21 @@ internal static class EnvgFusion
         _mainCopy.Clear();
         _mainCopy.SetGlobalVector(JitterId, new Vector4(jitter.x, jitter.y, 0f, 0f));
         _mainCopy.SetGlobalVector(FootprintId, new Vector4(_crop.z / normals.width, _crop.w / normals.height, 0f, 0f));
+        _mainCopy.BeginSample(FpanoProbe.Copy);
         _mainCopy.Blit(BuiltinRenderTextureType.CameraTarget, picture, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer2, normals, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, albedo, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer1, specular, Material, 25);
         _mainCopy.Blit(normals, depth, Material, 12);
+        _mainCopy.EndSample(FpanoProbe.Copy);
+        _mainCopy.BeginSample(FpanoProbe.Bodies);
+        long bodiesFrom = FpanoProbe.Now;
         DrawBodies(_mainCopy);
+        FpanoProbe.AddBodies(bodiesFrom, _probePlayers, _probeRenderers, _probeDraws);
+        _mainCopy.EndSample(FpanoProbe.Bodies);
+        _mainCopy.BeginSample(FpanoProbe.Lens);
         DrawScopeLens(_mainCopy, main, jitter);
+        _mainCopy.EndSample(FpanoProbe.Lens);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);
 
         if ((main.depthTextureMode & DepthTextureMode.MotionVectors) == 0)
@@ -1573,7 +1594,9 @@ internal static class EnvgFusion
         _motionCopy.Clear();
         _motionCopy.SetGlobalVector(JitterId, Vector4.zero);
         _motionCopy.SetGlobalVector(FootprintId, Vector4.zero);
+        _motionCopy.BeginSample(FpanoProbe.Motion);
         _motionCopy.Blit(BuiltinRenderTextureType.MotionVectors, Motion!, Material, 25);
+        _motionCopy.EndSample(FpanoProbe.Motion);
         _motionReady = true;
         if (!_loggedMotion)
         {
