@@ -4,26 +4,22 @@ using UnityEngine;
 
 namespace EnvgFusion;
 
-// The RAILINK rails, battery and cable socket (the node fpano_railink, under the F-PANO's prefab root) fitted onto the
-// helmet that holds the goggle: each vanilla helmet that takes it has its own place, scale and turn for the group
-// (item/railink_fit.json, fitted offline onto the helmet's own shell), set once when the goggle is attached or moved to
-// another helmet. Any other holder (a modded helmet, a mask or plate in between) leaves the group as the prefab has it.
-// The node is looked for only on such a change (and for a few frames after, as the game builds the model a frame or two
-// later), or when it is gone (the model made anew). Never on a timer.
+// The F-PANO as four items: the RAILINK rails (in the helmet's headset slot, or the new slot mod_equipment_railink),
+// their battery, the mount (only in the rails' mod_nvg) and the goggle (in the mount). Every model the game makes is
+// assembled slot by slot through ContainerCollectionView.SlotView.InsertItem; right after the rails go into a helmet
+// (or the mount into the rails, or the goggle into the mount), the rails are placed onto that helmet:
+//  - fpano_railink (the rails, battery and socket) at the helmet's mod_nvg x Rx(+90) x its fit (item/railink_fit.json,
+//    keyed on the helmet's template), its sides and back from the fit's left/right/back;
+//  - the rails' own mod_nvg at the helmet's mod_nvg, so the mount sits where a goggle on that helmet would;
+//  - the goggle's power cable bound to the rails' socket.
+// A helmet with no node for mod_equipment_railink gets an empty one before its slots are attached (the game would skip
+// the slot and never make the rails). Only when a model is made; nothing per frame.
 internal static class FpanoRailink
 {
     // the group's place, turn and scale on the helmet, and its two sides' and back's own shifts (fpano_railink_L, _R, _back)
     private struct Fit { public Vector3 Pos; public Quaternion Rot; public Vector3 Scale; public Vector3 Left, Right, Back; }
     private static readonly string[] Parts = { "fpano_railink_L", "fpano_railink_R", "fpano_railink_back" };
     private static Dictionary<string, Fit>? _fits;
-
-    private static object? _device, _holder;
-    private static string _holderId = "";
-    private static Transform? _node;
-    private static int _lookFrames;
-    private static bool _applied;
-    private const int LookFor = 30;
-    private static readonly List<Transform> _found = new List<Transform>();
 
     private static Dictionary<string, Fit> Fits()
     {
@@ -69,73 +65,42 @@ internal static class FpanoRailink
     private static Vector3 Vec(Newtonsoft.Json.Linq.JToken? v) =>
         v != null && v.Type == Newtonsoft.Json.Linq.JTokenType.Array ? new Vector3((float)v[0]!, (float)v[1]!, (float)v[2]!) : Vector3.zero;
 
-    // once a frame, with the F-PANO worn on the local player's head (null when not)
-    internal static void Update(EFT.Player? wearer, EFT.InventoryLogic.Item? device)
+    private const string RailsA = "6a4f9a400000000000000011", RailsB = "6a4f9a400000000000000012";
+    private const string MountA = "6a4f9a400000000000000031", MountB = "6a4f9a400000000000000032";
+    private const string GoggleA = "6a4f9a400000000000000001", GoggleB = "6a4f9a400000000000000002";
+    internal const string RailsSlot = "mod_equipment_railink";
+    private static readonly Quaternion SlotTurn = Quaternion.Euler(90f, 0f, 0f);   // what SlotView.InsertItem gives a mod with no ModPlacer
+    private static readonly HashSet<string> _logged = new HashSet<string>();
+
+    internal static bool IsRails(EFT.InventoryLogic.Item? item) { string id = item != null ? item.TemplateId.ToString() : ""; return id == RailsA || id == RailsB; }
+    private static int Kind(EFT.InventoryLogic.Item item)
     {
-        if (device == null || wearer == null)
-        {
-            _device = _holder = null;
-            _node = null;
-            return;
-        }
-        object? holder = null;
-        string holderId = "";
-        try
-        {
-            EFT.InventoryLogic.Item? parent = device.Parent?.Container?.ParentItem;
-            holder = parent;
-            holderId = parent != null ? parent.TemplateId.ToString() : "";
-        }
-        catch (System.Exception) { }
-        if (!ReferenceEquals(device, _device) || !ReferenceEquals(holder, _holder))
-        {
-            _device = device;
-            _holder = holder;
-            _holderId = holderId;
-            _node = null;
-            _applied = false;
-            _lookFrames = LookFor;
-        }
-        if (_node is not null && _node == null)
-        {
-            // the model made anew: look again, and fit again
-            _node = null;
-            _applied = false;
-            _lookFrames = LookFor;
-        }
-        if (_node == null && _lookFrames > 0)
-        {
-            _lookFrames--;
-            ((Component)wearer).transform.GetComponentsInChildren(true, _found);
-            foreach (Transform t in _found)
-                if (t.name == "fpano_railink")
-                {
-                    _node = t;
-                    break;
-                }
-            _found.Clear();
-        }
-        if (_node != null && !_applied)
-        {
-            _applied = true;
-            if (Place(_node, _holderId))
-                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: on helmet " + _holderId + ", fitted with its sides and back");
-            else
-                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: on " + (_holderId.Length > 0 ? "holder " + _holderId : "an unknown holder") + ", no fit for it: left as the prefab has it");
-        }
+        string id = item.TemplateId.ToString();
+        return id == RailsA || id == RailsB ? 1 : id == MountA || id == MountB ? 2 : id == GoggleA || id == GoggleB ? 3 : 0;
     }
-    // ---- every other model of the goggle: icons, the inspect window, the inventory, traders, bots, loot ----
-    // The game makes an item's model in ObjectsFactory (an item and what hangs in its slots, as one) and parents a worn
-    // one in PlayerBody's slot view: right after, each F-PANO in the item's slots gets its rails fitted onto the item that
-    // holds it. Only when such a model is made; nothing per frame.
-    private static readonly string[] FpanoIds = { "6a4f9a400000000000000001", "6a4f9a400000000000000002" };
-    private static readonly List<Transform> _made = new List<Transform>();
-    private static readonly HashSet<string> _loggedModel = new HashSet<string>();
+
+    // the rails above this item (itself, or up to three holders up), null if none
+    internal static EFT.InventoryLogic.Item? RailsAbove(EFT.InventoryLogic.Item? item)
+    {
+        for (int i = 0; i < 4 && item != null; i++)
+        {
+            if (IsRails(item))
+                return item;
+            item = item.Parent?.Container?.ParentItem;
+        }
+        return null;
+    }
 
     internal static void Patch(HarmonyLib.Harmony harmony)
     {
-        var post = new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterMade));
         int patched = 0;
+        var insert = HarmonyLib.AccessTools.Method(typeof(ContainerCollectionView.SlotView), nameof(ContainerCollectionView.SlotView.InsertItem));
+        if (insert != null)
+            try { harmony.Patch(insert, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterInsert))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: InsertItem not hooked: " + e.Message); }
+        var attach = HarmonyLib.AccessTools.Method(typeof(EFT.ObjectsFactory), "AttachMods");
+        if (attach != null)
+            try { harmony.Patch(attach, prefix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(BeforeAttach))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: AttachMods not hooked: " + e.Message); }
+        var post = new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterMade));
         foreach (string name in new[] { "CreateItem", "CreateLootPrefab", "CreateCleanLootPrefab" })
             foreach (var m in typeof(EFT.ObjectsFactory).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static))
             {
@@ -146,92 +111,235 @@ internal static class FpanoRailink
                     continue;
                 try { harmony.Patch(m, postfix: post); patched++; } catch (System.Exception) { }
             }
-        var parent = HarmonyLib.AccessTools.Method(typeof(EFT.PlayerBody).GetNestedType("SlotView", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic), "CreateAndParent");
-        if (parent != null)
-        {
-            try { harmony.Patch(parent, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterParented))); patched++; } catch (System.Exception) { }
-        }
-        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: fitted on every model the game makes (" + patched + " places hooked)");
+        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: placed as each model is assembled (" + patched + " places hooked)");
     }
 
-    private static void AfterMade(EFT.InventoryLogic.Item __0, GameObject __result)
-    {
-        try { FitModel(__result, __0); } catch (System.Exception) { }
-    }
-
-    private static readonly System.Reflection.FieldInfo? SlotViewItem = HarmonyLib.AccessTools.Field(typeof(EFT.PlayerBody).GetNestedType("SlotView", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic), "_item");
-    private static void AfterParented(object __instance, GameObject __1)
+    // a helmet whose model has no node for the rails' slot: an empty one at its root, before the game looks for it
+    private static void BeforeAttach(EFT.InventoryLogic.ContainerCollection __0, ContainerCollectionView __1)
     {
         try
         {
-            if (SlotViewItem?.GetValue(__instance) is EFT.InventoryLogic.Item item)
-                FitModel(__1, item);
+            if (__0 is not EFT.InventoryLogic.CompoundItem compound || compound.Slots == null || __1 == null || __1.GameObject == null)
+                return;
+            foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+            {
+                if (slot == null || !string.Equals(slot.ID, RailsSlot, System.StringComparison.OrdinalIgnoreCase))
+                    continue;
+                Transform root = __1.GameObject.transform;
+                if (Deep(root, RailsSlot, null) != null)
+                    return;
+                var node = new GameObject(RailsSlot);
+                node.transform.SetParent(root, false);
+                if (_logged.Add("node/" + compound.TemplateId))
+                    EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: helmet " + compound.TemplateId + " (" + __1.GameObject.name + ") had no " + RailsSlot + " node: one added");
+                return;
+            }
+        }
+        catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: adding the slot node failed: " + e.Message); }
+    }
+
+    private static void AfterInsert(ContainerCollectionView.SlotView __instance, EFT.InventoryLogic.Item item, GameObject itemView)
+    {
+        try
+        {
+            if (item == null || itemView == null)
+                return;
+            int kind = Kind(item);
+            if (kind == 0)
+                return;
+            EFT.InventoryLogic.Item? rails = RailsAbove(item);
+            Transform? railsRoot = kind == 1 ? itemView.transform : RailsRootAbove(__instance.Bone);
+            if (rails != null && railsRoot != null)
+                FitRails(railsRoot, rails);
+            else
+                Cables(itemView.transform, null);
+        }
+        catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: placing failed: " + e.Message); }
+    }
+
+    // a model made on its own (an icon, loot, the inspect window): the rails as the prefab has them, cables to their own
+    private static void AfterMade(EFT.InventoryLogic.Item __0, GameObject __result)
+    {
+        try
+        {
+            if (__0 == null || __result == null)
+                return;
+            int kind = Kind(__0);
+            if (kind == 1)
+                FitRails(__result.transform, __0);
+            else if (kind != 0)
+                Cables(__result.transform, null);
         }
         catch (System.Exception) { }
     }
 
-    // the goggle in this item's slots, at any depth (null: none)
-    private static EFT.InventoryLogic.Item? FpanoIn(EFT.InventoryLogic.Item item, int depth)
+    private static Transform? RailsRootAbove(Transform? t)
     {
-        string id = item.TemplateId.ToString();
-        if (id == FpanoIds[0] || id == FpanoIds[1])
-            return item;
-        if (depth > 6 || item is not EFT.InventoryLogic.CompoundItem compound || compound.Slots == null)
-            return null;
-        foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
-        {
-            EFT.InventoryLogic.Item? inner = slot?.ContainedItem;
-            if (inner == null)
-                continue;
-            EFT.InventoryLogic.Item? found = FpanoIn(inner, depth + 1);
-            if (found != null)
-                return found;
-        }
+        for (int i = 0; i < 16 && t != null; i++, t = t.parent)
+            if (t.name.StartsWith("fpano_railink_rails_", System.StringComparison.Ordinal))
+                return t;
         return null;
     }
 
-    private static void FitModel(GameObject? model, EFT.InventoryLogic.Item? item)
+    // the first node of that name under root (not root itself), breadth first, not inside `skip`
+    private static readonly List<Transform> _queue = new List<Transform>();
+    private static Transform? Deep(Transform root, string name, Transform? skip)
     {
-        if (model == null || item == null)
-            return;
-        EFT.InventoryLogic.Item? fpano = FpanoIn(item, 0);
-        if (fpano == null)
-            return;
-        string holderId = "";
-        try { holderId = fpano.Parent?.Container?.ParentItem?.TemplateId.ToString() ?? ""; } catch (System.Exception) { }
-        model.GetComponentsInChildren(true, _made);
-        bool fitted = false;
-        foreach (Transform t in _made)
-            if (t.name == "fpano_railink")
-                fitted |= Place(t, holderId);
-        _made.Clear();
-        if (_loggedModel.Add(holderId + "/" + model.name))
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: model " + model.name + " on " + (holderId.Length > 0 ? holderId : "no holder") + ", " + (fitted ? "fitted" : "no fit: left as the prefab has it"));
+        _queue.Clear();
+        _queue.Add(root);
+        for (int i = 0; i < _queue.Count; i++)
+        {
+            Transform t = _queue[i];
+            if (t == skip)
+                continue;
+            if (i > 0 && string.Equals(t.name, name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                _queue.Clear();
+                return t;
+            }
+            for (int c = 0; c < t.childCount; c++)
+                _queue.Add(t.GetChild(c));
+        }
+        _queue.Clear();
+        return null;
     }
 
-    // the group and its sides and back placed for that holder (true), or all put back as the prefab has them (false)
-    private static readonly List<Transform> _parts = new List<Transform>();
-    private static bool Place(Transform node, string holderId)
+    // the helmet's own mod_nvg: in the nearest model above the rails (the one with its AssetPoolObject)
+    private static Transform? HelmetNvg(Transform rails)
     {
-        bool known = Fits().TryGetValue(holderId, out Fit fit);
-        node.localPosition = known ? fit.Pos : Vector3.zero;
-        node.localRotation = known ? fit.Rot : Quaternion.identity;
-        node.localScale = known ? fit.Scale : Vector3.one;
-        node.GetComponentsInChildren(true, _parts);
-        foreach (Transform t in _parts)
+        Transform? t = rails.parent;
+        for (int i = 0; i < 16 && t != null; i++, t = t.parent)
+            if (t.GetComponent<EFT.AssetsManager.AssetPoolObject>() != null)
+                return Deep(t, "mod_nvg", rails);
+        return null;
+    }
+
+    private struct Pose { public Vector3 P; public Quaternion R; public Vector3 S; }
+    private static readonly Dictionary<int, Pose> _prefab = new Dictionary<int, Pose>();
+    private static void Remember(Transform t)
+    {
+        int id = t.GetInstanceID();
+        if (!_prefab.ContainsKey(id))
+            _prefab[id] = new Pose { P = t.localPosition, R = t.localRotation, S = t.localScale };
+    }
+    private static void Restore(Transform t)
+    {
+        if (_prefab.TryGetValue(t.GetInstanceID(), out Pose p))
         {
-            if (t.name == Parts[0])
-                t.localPosition = known ? fit.Left : Vector3.zero;
-            else if (t.name == Parts[1])
-                t.localPosition = known ? fit.Right : Vector3.zero;
-            else if (t.name == Parts[2])
-                t.localPosition = known ? fit.Back : Vector3.zero;
-            else
-                continue;
-            t.localRotation = Quaternion.identity;
-            t.localScale = Vector3.one;
+            t.localPosition = p.P;
+            t.localRotation = p.R;
+            t.localScale = p.S;
         }
-        _parts.Clear();
-        return known;
+    }
+
+    private static readonly List<Transform> _parts = new List<Transform>();
+    private static void FitRails(Transform rails, EFT.InventoryLogic.Item railsItem)
+    {
+        Transform? group = rails.Find("fpano_railink");
+        Transform? railsNvg = rails.Find("mod_nvg");
+        if (group != null) Remember(group);
+        if (railsNvg != null) Remember(railsNvg);
+        EFT.InventoryLogic.Item? helmet = railsItem.Parent?.Container?.ParentItem;
+        string helmetId = helmet != null ? helmet.TemplateId.ToString() : "";
+        Transform? helmetNvg = helmet != null ? HelmetNvg(rails) : null;
+        bool known = false;
+        Fit fit = default;
+        if (helmetNvg != null)
+        {
+            known = Fits().TryGetValue(helmetId, out fit);
+            if (!known)
+                fit = new Fit { Pos = Vector3.zero, Rot = Quaternion.identity, Scale = Vector3.one };
+            if (group != null)
+            {
+                group.SetPositionAndRotation(helmetNvg.TransformPoint(SlotTurn * fit.Pos), helmetNvg.rotation * SlotTurn * fit.Rot);
+                Vector3 above = group.parent != null ? group.parent.lossyScale : Vector3.one, there = helmetNvg.lossyScale;
+                group.localScale = new Vector3(fit.Scale.x * there.x / Mathf.Max(above.x, 1e-6f), fit.Scale.y * there.y / Mathf.Max(above.y, 1e-6f), fit.Scale.z * there.z / Mathf.Max(above.z, 1e-6f));
+            }
+            if (railsNvg != null)
+                railsNvg.SetPositionAndRotation(helmetNvg.position, helmetNvg.rotation);
+        }
+        else
+        {
+            if (group != null) Restore(group);
+            if (railsNvg != null) Restore(railsNvg);
+        }
+        if (group != null)
+        {
+            group.GetComponentsInChildren(true, _parts);
+            foreach (Transform t in _parts)
+            {
+                if (t.name == Parts[0])
+                    t.localPosition = known ? fit.Left : Vector3.zero;
+                else if (t.name == Parts[1])
+                    t.localPosition = known ? fit.Right : Vector3.zero;
+                else if (t.name == Parts[2])
+                    t.localPosition = known ? fit.Back : Vector3.zero;
+                else
+                    continue;
+                t.localRotation = Quaternion.identity;
+                t.localScale = Vector3.one;
+            }
+            _parts.Clear();
+        }
+        Transform? socket = group != null ? group.Find("fpano_railink_L/fpano_power_socket") : null;
+        int cables = Cables(rails, socket);
+        string key = (helmetNvg != null ? helmetId : "-") + "/" + rails.name + "/" + cables;
+        if (_logged.Add(key))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: " + rails.name + (helmetNvg == null ? " on no helmet: as the prefab has it" : " on helmet " + helmetId + ", " + (known ? "fitted" : "no fit for it: at its mod_nvg as the prefab has it"))
+                + (cables > 0 ? ", " + cables + " power cable(s) bound to " + (socket != null ? "the rails' socket" : "their own placeholder") : ""));
+    }
+
+    // every power cable under root bound to the socket (null: to its goggle's own placeholder); how many
+    private static readonly List<SkinnedMeshRenderer> _skins = new List<SkinnedMeshRenderer>();
+    private static int Cables(Transform root, Transform? socket)
+    {
+        root.GetComponentsInChildren(true, _skins);
+        int n = 0;
+        foreach (SkinnedMeshRenderer smr in _skins)
+        {
+            if (!smr.name.StartsWith("fpano_power_cable", System.StringComparison.Ordinal))
+                continue;
+            Transform[] bones = smr.bones;
+            if (bones.Length < 2)
+                continue;
+            Transform? to = socket;
+            for (Transform? t = smr.transform; to == null && t != null; t = t.parent)
+                to = t.Find("fpano_power_socket");
+            n++;
+            if (to == null || bones[1] == to)
+                continue;
+            bones[1] = to;
+            smr.bones = bones;
+        }
+        _skins.Clear();
+        return n;
+    }
+
+    // ---- the battery: the rails above the worn goggle, their battery slot empty ----
+    private static EFT.InventoryLogic.Item? _seenRails;
+    private static EFT.InventoryLogic.Slot? _battery;
+    private static bool _seenAny, _wasUnpowered;
+    internal static bool Unpowered(EFT.InventoryLogic.Item? goggle)
+    {
+        EFT.InventoryLogic.Item? mount = goggle?.Parent?.Container?.ParentItem;
+        EFT.InventoryLogic.Item? rails = mount?.Parent?.Container?.ParentItem;
+        if (!_seenAny || !ReferenceEquals(rails, _seenRails))
+        {
+            _seenAny = true;
+            _seenRails = rails;
+            _battery = null;
+            if (rails is EFT.InventoryLogic.CompoundItem compound && IsRails(rails) && compound.Slots != null)
+                foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+                    if (slot != null && string.Equals(slot.ID, "mod_battery", System.StringComparison.OrdinalIgnoreCase))
+                        _battery = slot;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO: " + (_battery != null ? "powered from the RAILINK's battery slot" : "no RAILINK battery slot above the goggle: always powered"));
+        }
+        bool off = _battery != null && _battery.ContainedItem == null;
+        if (off != _wasUnpowered)
+        {
+            _wasUnpowered = off;
+            EnvgFusionPlugin.Log?.LogInfo(off ? "F-PANO: no battery in the RAILINK: the goggle goes down dark" : "F-PANO: battery in: powered");
+        }
+        return off;
     }
 }

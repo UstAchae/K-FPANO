@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.1.11";
+    public const string Version = "0.2.1";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -161,7 +161,6 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     {
         bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
-        FpanoRailink.Update(EnvgFusion.Wearer, EnvgFusion.WornDevice);
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
         {
@@ -489,6 +488,8 @@ internal static class EnvgFusion
     // the F-PANO on the local player's head (down or up), and who wears it: for its pods
     internal static EFT.Player? Wearer;
     internal static EFT.InventoryLogic.Item? WornDevice;
+    // the worn goggle's rails have no battery: it goes down, but shows nothing (the tubes dark, no thermal)
+    internal static bool Unpowered;
 
     internal static bool EnvgbDown
     {
@@ -500,6 +501,7 @@ internal static class EnvgFusion
             _envgbDown = false;
             Wearer = null;
             WornDevice = null;
+            Unpowered = false;
             try
             {
                 if (!Singleton<EFT.GameWorld>.Instantiated)
@@ -524,6 +526,7 @@ internal static class EnvgFusion
                 {
                     Wearer = player;
                     WornDevice = nv.Item;
+                    Unpowered = FpanoRailink.Unpowered(nv.Item);
                 }
             }
             catch (System.Exception)
@@ -776,7 +779,8 @@ internal static class EnvgFusion
     private static CommandBuffer? _fuseDraw;
 
     private static readonly int I2DimId = Shader.PropertyToID("_EnvgI2Dim");
-    internal static float I2Gain => EnvgFusionPlugin.GainNow;
+    // (no battery in the rails: the tubes dark)
+    internal static float I2Gain => EnvgbDown && Unpowered ? 0f : EnvgFusionPlugin.GainNow;
 
 
 
