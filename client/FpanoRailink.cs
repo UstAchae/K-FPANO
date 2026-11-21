@@ -12,7 +12,9 @@ namespace EnvgFusion;
 // later), or when it is gone (the model made anew). Never on a timer.
 internal static class FpanoRailink
 {
-    private struct Fit { public Vector3 Pos; public Quaternion Rot; public float Scale; }
+    // the group's place, turn and scale on the helmet, and its two sides' and back's own shifts (fpano_railink_L, _R, _back)
+    private struct Fit { public Vector3 Pos; public Quaternion Rot; public Vector3 Scale; public Vector3 Left, Right, Back; }
+    private static readonly string[] Parts = { "fpano_railink_L", "fpano_railink_R", "fpano_railink_back" };
     private static Dictionary<string, Fit>? _fits;
 
     private static object? _device, _holder;
@@ -49,7 +51,11 @@ internal static class FpanoRailink
                 {
                     Pos = new Vector3((float)pos[0]!, (float)pos[1]!, (float)pos[2]!),
                     Rot = new Quaternion((float)rot[0]!, (float)rot[1]!, (float)rot[2]!, (float)rot[3]!),
-                    Scale = (float)scale,
+                    // one number, or [sx, sy, sz]
+                    Scale = scale.Type == Newtonsoft.Json.Linq.JTokenType.Array ? new Vector3((float)scale[0]!, (float)scale[1]!, (float)scale[2]!) : Vector3.one * (float)scale,
+                    Left = Vec(entry.Value["left"]),
+                    Right = Vec(entry.Value["right"]),
+                    Back = Vec(entry.Value["back"]),
                 };
             }
         }
@@ -59,6 +65,9 @@ internal static class FpanoRailink
         }
         return _fits;
     }
+
+    private static Vector3 Vec(Newtonsoft.Json.Linq.JToken? v) =>
+        v != null && v.Type == Newtonsoft.Json.Linq.JTokenType.Array ? new Vector3((float)v[0]!, (float)v[1]!, (float)v[2]!) : Vector3.zero;
 
     // once a frame, with the F-PANO worn on the local player's head (null when not)
     internal static void Update(EFT.Player? wearer, EFT.InventoryLogic.Item? device)
@@ -109,20 +118,10 @@ internal static class FpanoRailink
         if (_node != null && !_applied)
         {
             _applied = true;
-            if (Fits().TryGetValue(_holderId, out Fit fit))
-            {
-                _node.localPosition = fit.Pos;
-                _node.localRotation = fit.Rot;
-                _node.localScale = Vector3.one * fit.Scale;
-                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: on helmet " + _holderId + ", fitted (scale " + fit.Scale.ToString("F2") + ")");
-            }
+            if (Place(_node, _holderId))
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: on helmet " + _holderId + ", fitted with its sides and back");
             else
-            {
-                _node.localPosition = Vector3.zero;
-                _node.localRotation = Quaternion.identity;
-                _node.localScale = Vector3.one;
                 EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: on " + (_holderId.Length > 0 ? "holder " + _holderId : "an unknown holder") + ", no fit for it: left as the prefab has it");
-            }
         }
     }
     // ---- every other model of the goggle: icons, the inspect window, the inventory, traders, bots, loot ----
@@ -210,19 +209,29 @@ internal static class FpanoRailink
             EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: model " + model.name + " on " + (holderId.Length > 0 ? holderId : "no holder") + ", " + (fitted ? "fitted" : "no fit: left as the prefab has it"));
     }
 
-    // the group placed for that holder (true), or put back as the prefab has it (false)
+    // the group and its sides and back placed for that holder (true), or all put back as the prefab has them (false)
+    private static readonly List<Transform> _parts = new List<Transform>();
     private static bool Place(Transform node, string holderId)
     {
-        if (Fits().TryGetValue(holderId, out Fit fit))
+        bool known = Fits().TryGetValue(holderId, out Fit fit);
+        node.localPosition = known ? fit.Pos : Vector3.zero;
+        node.localRotation = known ? fit.Rot : Quaternion.identity;
+        node.localScale = known ? fit.Scale : Vector3.one;
+        node.GetComponentsInChildren(true, _parts);
+        foreach (Transform t in _parts)
         {
-            node.localPosition = fit.Pos;
-            node.localRotation = fit.Rot;
-            node.localScale = Vector3.one * fit.Scale;
-            return true;
+            if (t.name == Parts[0])
+                t.localPosition = known ? fit.Left : Vector3.zero;
+            else if (t.name == Parts[1])
+                t.localPosition = known ? fit.Right : Vector3.zero;
+            else if (t.name == Parts[2])
+                t.localPosition = known ? fit.Back : Vector3.zero;
+            else
+                continue;
+            t.localRotation = Quaternion.identity;
+            t.localScale = Vector3.one;
         }
-        node.localPosition = Vector3.zero;
-        node.localRotation = Quaternion.identity;
-        node.localScale = Vector3.one;
-        return false;
+        _parts.Clear();
+        return known;
     }
 }
