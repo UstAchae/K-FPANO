@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.27";
+    public const string Version = "0.2.28";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -96,7 +96,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             new ConfigDescription("由深度和表面朝向得到的外形轮廓有多强。0 是不画。", new AcceptableValueRange<float>(0f, 3f), advanced));
         Glow = Config.Bind(Advanced, "光晕", 0.6f,
             new ConfigDescription("线条周围光晕的强度。", new AcceptableValueRange<float>(0f, 3f), advanced));
-        SensorResolution = Config.Bind(Advanced, "热像角分辨率（像素/度）", 32f,
+        SensorResolution = Config.Bind(Advanced, "热像角分辨率（像素/度）", 16f,
             new ConfigDescription("热像每度视场多少像素（真机约 640 像素 / 40°）。", new AcceptableValueRange<float>(4f, 32f), advanced));
         RenderScale = Config.Bind(Advanced, "热像渲染倍数", 1,
             new ConfigDescription("按传感器分辨率的几倍处理。1（默认）像真传感器，细碎的叶子平均成一团，线少而稳；2 细节多、线碎。", new AcceptableValueRange<int>(1, 2), advanced));
@@ -168,7 +168,6 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
-        FpanoProbe.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
@@ -483,7 +482,7 @@ internal static class EnvgFusion
     private static readonly int CamToWorldId = Shader.PropertyToID("_EnvgCamToWorld");
     private static readonly int TanId = Shader.PropertyToID("_EnvgTan");
 
-    internal static bool Active => (EnvgFusionPlugin.On?.Value == true || EnvgbDown) && !FpanoProbe.ThermalOff;
+    internal static bool Active => EnvgFusionPlugin.On?.Value == true || EnvgbDown;
 
     // ---- the device: the F-PANO (either colour) on the local player's head, flipped down ----
     private static readonly string[] EnvgbIds = { "6a4f9a400000000000000001", "6a4f9a400000000000000002" };   // the F-PANO, FDE and black
@@ -1202,9 +1201,7 @@ internal static class EnvgFusion
         }
         try
         {
-            long probeFrom = FpanoProbe.Now;
             RenderThermal(_main);
-            FpanoProbe.AddThermal(probeFrom);
         }
         catch (System.Exception e)
         {
