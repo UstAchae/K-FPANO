@@ -6,7 +6,7 @@ import json, sys
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
-OUT = Path(sys.argv[1]); sys.argv = sys.argv[:1]
+ARGS = sys.argv[1:]; sys.argv = sys.argv[:1]
 import fit_profile as FP
 import UnityPy
 from fit_helmets import read_bin, qmat, WIN, SRC, ITEM
@@ -22,7 +22,8 @@ def F(f): return M(f['pos'], f['rot'], f['scale'][0])
 
 
 def helmet(tpl):
-    f = fits[tpl]; drop = {(e['renderer'], e['mesh']): set(e['drop']) for e in hide.get(f['shape'], [])}
+    f = fits[tpl]; drop = {}
+    for e in hide.get(f['shape'], []): drop.setdefault((e['renderer'], e['mesh']), set()).update(e['drop'])
     tris = []
     for go, mesh, T, lab in renderers(f['prefab']):
         d = set()
@@ -72,7 +73,15 @@ def headset_tris(hid):
 def place(f, hid, tpl):
     p = heads[hid]['perHelmet'].get(tpl) or {**heads[hid]['onGroup'], 'scaleX': 1.0}
     m = F(f) @ M(p['pos'], p['rot']); m[:3, :3] /= np.cbrt(np.linalg.det(m[:3, :3]))
-    return m @ np.diag([p['scaleX'], 1, 1, 1]) @ G
+    return m @ np.diag([p.get('scaleX', 1.0), 1, 1, 1]) @ G
+
+
+def bent(hid, tpl, T):
+    """The headset's triangles (its local frame) with the arms bent as the client bends them (fit_headsets.py)."""
+    p = heads[hid]['perHelmet'].get(tpl)
+    if not p or 'bendAxis' not in p: return T
+    from fit_headsets import bend
+    return bend(T.reshape(-1, 3), p).reshape(T.shape)
 
 
 def render(parts, view, path, size=900, box=None, title=''):
@@ -99,24 +108,26 @@ def render(parts, view, path, size=900, box=None, title=''):
     img.save(path); return R
 
 
-OUT.mkdir(parents=True, exist_ok=True)
-CASES = [('5e4bfc1586f774264f7582d3', '5a16b9fffcdbcb0176308b34', 'TC800_RAC'),
-         ('5e4bfc1586f774264f7582d3', '66b5f69ea7f72d197e70bcdb', 'TC800_ComTacV'),
-         ('5f60b34a41e30a4ab12a6947', '66b5f6a28ca68c6461709ed8', 'Caiman_ComTacVI')]
-HEL, RAIL, HS = (150, 152, 158), (196, 172, 122), (70, 74, 70)
-for tpl, hid, name in CASES:
-    f = fits[tpl]; Hm = helmet(tpl); Rl = rails(f); Hs = headset_tris(hid) @ np.eye(3)
-    W = place(f, hid, tpl); Hs = Hs @ W[:3, :3].T + W[:3, 3]
-    sx = (heads[hid]['perHelmet'].get(tpl) or {}).get('scaleX', 1.0)
-    parts = [(Hm, HEL), (Rl, RAIL), (Hs, HS)]
-    label = f'{name}  scaleX {sx:.3f}'
-    render(parts, (-90, 0), OUT / f'{name}_left.png', title=label + '  left side')
-    render(parts, (-135, 15), OUT / f'{name}_front_left.png', title=label + '  front-left')
-    render(parts, (180, 10), OUT / f'{name}_back.png', title=label + '  back')
-    # the left clip: headset vertices nearest the left rail, zoomed in the left-side view
-    yaw = np.radians(-90); Ry = np.array([[np.cos(yaw), 0, np.sin(yaw)], [0, 1, 0], [-np.sin(yaw), 0, np.cos(yaw)]])
-    Rv = Rl.reshape(-1, 3); Hv = Hs.reshape(-1, 3); L = Hv[:, 0] < 0
-    near = Hv[L][np.argsort(np.min(np.linalg.norm(Hv[L][:, None, :] - Rv[None, ::40], axis=2), 1))[:200]].mean(0)
-    c = Ry @ near
-    render(parts, (-90, 0), OUT / f'{name}_left_clip.png', box=(c[0], c[1], 0.035), title=label + '  left clip close-up')
-    print(name, 'done')
+if __name__ == '__main__':
+    OUT = Path(ARGS[0])
+    OUT.mkdir(parents=True, exist_ok=True)
+    CASES = [('5e4bfc1586f774264f7582d3', '5a16b9fffcdbcb0176308b34', 'TC800_RAC'),
+             ('5e4bfc1586f774264f7582d3', '66b5f69ea7f72d197e70bcdb', 'TC800_ComTacV'),
+             ('5f60b34a41e30a4ab12a6947', '66b5f6a28ca68c6461709ed8', 'Caiman_ComTacVI')]
+    HEL, RAIL, HS = (150, 152, 158), (196, 172, 122), (70, 74, 70)
+    for tpl, hid, name in CASES:
+        f = fits[tpl]; Hm = helmet(tpl); Rl = rails(f); Hs = bent(hid, tpl, headset_tris(hid))
+        W = place(f, hid, tpl); Hs = Hs @ W[:3, :3].T + W[:3, 3]
+        p = heads[hid]['perHelmet'].get(tpl) or {}; sx = p.get('scaleX', 1.0)
+        parts = [(Hm, HEL), (Rl, RAIL), (Hs, HS)]
+        label = f"{name}  arms bent {p.get('bendNegX', 0) * 1000:+.1f} / {p.get('bendPosX', 0) * 1000:+.1f} mm" 
+        render(parts, (-90, 0), OUT / f'{name}_left.png', title=label + '  left side')
+        render(parts, (-135, 15), OUT / f'{name}_front_left.png', title=label + '  front-left')
+        render(parts, (180, 10), OUT / f'{name}_back.png', title=label + '  back')
+        # the left clip: headset vertices nearest the left rail, zoomed in the left-side view
+        yaw = np.radians(-90); Ry = np.array([[np.cos(yaw), 0, np.sin(yaw)], [0, 1, 0], [-np.sin(yaw), 0, np.cos(yaw)]])
+        Rv = Rl.reshape(-1, 3); Hv = Hs.reshape(-1, 3); L = Hv[:, 0] < 0
+        near = Hv[L][np.argsort(np.min(np.linalg.norm(Hv[L][:, None, :] - Rv[None, ::40], axis=2), 1))[:200]].mean(0)
+        c = Ry @ near
+        render(parts, (-90, 0), OUT / f'{name}_left_clip.png', box=(c[0], c[1], 0.035), title=label + '  left clip close-up')
+        print(name, 'done')
