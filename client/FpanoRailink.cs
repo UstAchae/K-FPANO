@@ -70,7 +70,9 @@ internal static class FpanoRailink
     // where each helmet headset sits on the rails (item/railink_headsets.json): fpano_railink/mod_equipment's local pose
     // under fpano_railink, mapped from that headset's own helmet; a headset not in it: the prefab's place (the RAC's)
     private static Dictionary<string, Pose>? _headsets;
-    private static readonly Dictionary<string, Pose> _onRails = new Dictionary<string, Pose>();   // the same on rails with no helmet: local under fpano_railink
+    // the same on rails with no helmet: in the rails' root frame, the rails then fitted as on the headset's own helmet
+    private static readonly Dictionary<string, Pose> _onRails = new Dictionary<string, Pose>();
+    private static readonly Dictionary<string, string> _onRailsFit = new Dictionary<string, string>();
     private static Dictionary<string, Pose> Headsets()
     {
         if (_headsets != null)
@@ -96,7 +98,12 @@ internal static class FpanoRailink
                 var barePos = bare?["pos"];
                 var bareRot = bare?["rot"];
                 if (barePos != null && bareRot != null)
+                {
                     _onRails[entry.Name] = new Pose { P = Vec(barePos), R = new Quaternion((float)bareRot[0]!, (float)bareRot[1]!, (float)bareRot[2]!, (float)bareRot[3]!), S = Vector3.one };
+                    string? fitOf = (string?)bare!["fit"];
+                    if (!string.IsNullOrEmpty(fitOf))
+                        _onRailsFit[entry.Name] = fitOf!;
+                }
             }
         }
         catch (System.Exception e)
@@ -109,7 +116,7 @@ internal static class FpanoRailink
     // the rails' headset slot node placed for the headset in it: the table's pose is relative to the helmet model's root
     // (the cups on the ears as on the headset's own helmet); none, one not in the table, or the rails on no helmet: as
     // the prefab has it
-    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset, Transform? helmetRoot)
+    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset, Transform? helmetRoot, Transform railsRoot)
     {
         Remember(node);
         string id = headset != null ? headset.TemplateId.ToString() : "";
@@ -121,9 +128,8 @@ internal static class FpanoRailink
         }
         else if (helmetRoot == null && id.Length > 0 && Headsets() != null && _onRails.TryGetValue(id, out Pose bare))
         {
-            // the rails on no helmet (an icon, loot): the headset where it sits on them
-            node.localPosition = bare.P;
-            node.localRotation = bare.R;
+            // the rails on no helmet (an icon, loot): the headset where it sits on them, from the rails' root
+            node.SetPositionAndRotation(railsRoot.TransformPoint(bare.P), railsRoot.rotation * bare.R);
         }
         else
             Restore(node);
@@ -497,10 +503,15 @@ internal static class FpanoRailink
             int kind = Kind(item);
             if (kind == 0)
             {
-                // a headset into the rails' headset slot: that slot's node to the headset's own place
+                // a headset into the rails' headset slot: the rails placed again (on bare rails they take the fit of the
+                // headset's own helmet), its node at the headset's own place
                 var into = item.CurrentAddress?.Container;
                 if (into != null && into.ID == "mod_equipment" && IsRails(into.ParentItem) && __instance.Bone != null)
-                    PlaceHeadset(__instance.Bone, item, HelmetRootOf(RailsRootAbove(__instance.Bone)?.parent));
+                {
+                    Transform? railsRoot = RailsRootAbove(__instance.Bone);
+                    if (railsRoot != null)
+                        FitRails(railsRoot, into.ParentItem);
+                }
                 return;
             }
             if (kind == 1)
@@ -606,7 +617,28 @@ internal static class FpanoRailink
         Transform? helmetNvg = helmetRoot != null ? Deep(helmetRoot, "mod_nvg", rails) : null;
         bool known = false;
         Fit fit = default;
-        if (helmetNvg != null)
+        EFT.InventoryLogic.Item? headset = null;
+        if (railsItem is EFT.InventoryLogic.CompoundItem withSlots && withSlots.Slots != null)
+            foreach (EFT.InventoryLogic.Slot slot in withSlots.Slots)
+                if (slot != null && slot.ID == "mod_equipment")
+                    headset = slot.ContainedItem;
+        string headsetId = headset != null ? headset.TemplateId.ToString() : "";
+        if (helmetNvg == null && headsetId.Length > 0 && Headsets() != null && _onRailsFit.TryGetValue(headsetId, out string fitOf) && Fits().TryGetValue(fitOf, out fit))
+        {
+            // bare rails with a headset: fitted as on the headset's own helmet (in the rails' root frame, which is the
+            // goggle's root frame, as the group is in under a helmet's mod_nvg)
+            known = true;
+            if (railsNvg != null) Restore(railsNvg);
+            if (group != null)
+            {
+                group.localPosition = fit.Pos;
+                group.localRotation = fit.Rot;
+                group.localScale = fit.Scale;
+            }
+            if (_logged.Add("bare/" + headsetId))
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: bare rails with headset " + headsetId + ": fitted as on helmet " + fitOf);
+        }
+        else if (helmetNvg != null)
         {
             known = Fits().TryGetValue(helmetId, out fit);
             if (!known)
@@ -655,14 +687,7 @@ internal static class FpanoRailink
         // the headset (its node under the group: placed after it)
         Transform? headsetNode = group != null ? group.Find("mod_equipment") : null;
         if (headsetNode != null)
-        {
-            EFT.InventoryLogic.Item? headset = null;
-            if (railsItem is EFT.InventoryLogic.CompoundItem withSlots && withSlots.Slots != null)
-                foreach (EFT.InventoryLogic.Slot slot in withSlots.Slots)
-                    if (slot != null && slot.ID == "mod_equipment")
-                        headset = slot.ContainedItem;
-            PlaceHeadset(headsetNode, headset, helmetNvg != null ? helmetRoot : null);
-        }
+            PlaceHeadset(headsetNode, headset, helmetNvg != null ? helmetRoot : null, rails);
         // the helmet's own rails off
         if (helmetRoot != null && helmet != null && helmetNvg != null)
             Rail(helmetRoot, ShapeOf(helmet), rails);
