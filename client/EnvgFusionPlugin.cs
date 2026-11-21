@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.1.3";
+    public const string Version = "0.1.4";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -55,7 +55,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         Show = Config.Bind(Section, "显示内容", ShowOutline,
             new ConfigDescription("F-PANO 的四种模式（游戏里用 ← → 切换）：纯夜视：只有白磷夜视。轮廓：温差的边缘画成琥珀色的线。白热融合：整幅热像（热的亮）叠在夜视上。黑热融合：整幅热像（冷的亮，热的暗）叠在夜视上。",
                 new AcceptableValueList<string>(ShowI2, ShowOutline, ShowFusion, ShowBlackHot), new ConfigurationManagerAttributes { Order = 9 }));
-        HeatSource = Config.Bind(Section, "热像来源", SourceModel,
+        HeatSource = Config.Bind(Section, "热像来源", SourceNative,
             new ConfigDescription("物理模型：本模组按阳光、夜间散热、天空、植被、人体估算的温度。原版方法：照游戏原版热成像的做法，表面的热度取贴图颜色深浅，人按体温单独标热（用来对比）。三种热像模式都跟着变。",
                 new AcceptableValueList<string>(SourceModel, SourceNative), new ConfigurationManagerAttributes { Order = 8 }));
         GrassAmount = Config.Bind(Section, "草的轮廓强度", 2f,
@@ -92,7 +92,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             new ConfigDescription("由深度和表面朝向得到的外形轮廓有多强。0 是不画。", new AcceptableValueRange<float>(0f, 3f), advanced));
         Glow = Config.Bind(Advanced, "光晕", 0.6f,
             new ConfigDescription("线条周围光晕的强度。", new AcceptableValueRange<float>(0f, 3f), advanced));
-        SensorResolution = Config.Bind(Advanced, "热像角分辨率（像素/度）", 16f,
+        SensorResolution = Config.Bind(Advanced, "热像角分辨率（像素/度）", 32f,
             new ConfigDescription("热像每度视场多少像素（真机约 640 像素 / 40°）。", new AcceptableValueRange<float>(4f, 32f), advanced));
         RenderScale = Config.Bind(Advanced, "热像渲染倍数", 1,
             new ConfigDescription("按传感器分辨率的几倍处理。1（默认）像真传感器，细碎的叶子平均成一团，线少而稳；2 细节多、线碎。", new AcceptableValueRange<int>(1, 2), advanced));
