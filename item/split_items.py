@@ -183,6 +183,27 @@ def mirror_bin(src, dst):
         np.array([T.size], np.int32).tofile(f); T.astype(np.int32).tofile(f)
 
 
+def split_dome(src, dome, base):
+    """The strobe mesh cut in two by the model's own opacity map: its clear housing (the semi-transparent triangles,
+    opacity < 0.8 at their uv centre) and the rest (the board and base inside). For the client's flash: the dome lights
+    up in its own shape (user's video 20261121-1651: "the whole clear dome lights up warm white, about 3 frames")."""
+    from PIL import Image
+    from prepare import RAILINK_TEX
+    op = np.asarray(Image.open(RAILINK_TEX / 'Helmet_OpsCore_RAILINK_SHSF_Strobe_Opacity.png').convert('L')).astype(float) / 255
+    with open(src, 'rb') as f:
+        nv, nt, ns = np.fromfile(f, np.int32, 3)
+        V = np.fromfile(f, np.float32, nv * 3).reshape(-1, 3); N = np.fromfile(f, np.float32, nv * 3).reshape(-1, 3)
+        U = np.fromfile(f, np.float32, nv * 2).reshape(-1, 2); ni = np.fromfile(f, np.int32, 1)[0]; T = np.fromfile(f, np.int32, ni).reshape(-1, 3)
+    uv = U[T].mean(1); h, w = op.shape
+    clear = op[np.clip(((1 - uv[:, 1]) % 1) * h, 0, h - 1).astype(int), np.clip((uv[:, 0] % 1) * w, 0, w - 1).astype(int)] < 0.8
+    for dst, sel in ((dome, clear), (base, ~clear)):
+        t = T[sel]; used = np.unique(t); remap = np.full(nv, -1, np.int32); remap[used] = np.arange(len(used))
+        with open(dst, 'wb') as f:
+            np.array([len(used), len(t), 1], np.int32).tofile(f); V[used].tofile(f); N[used].tofile(f); U[used].tofile(f)
+            np.array([t.size], np.int32).tofile(f); remap[t].astype(np.int32).tofile(f)
+    return int(clear.sum()), int((~clear).sum())
+
+
 def light_items(out, rails):
     """The light items' node lists (in their root frame: the left-side mount point of their kind), and the rails' slots
     for them (appended to `rails`): left on fpano_railink_L at that point, right on fpano_railink_R its mirror image."""
@@ -204,7 +225,11 @@ def light_items(out, rails):
         v = read_bin(out / f"{mesh}.bin")[0]
         place = np.eye(4); place[:3, 3] -= points[kind]   # mesh (root frame, left side) -> item frame
         V = v + place[:3, 3]
-        ns = [node(mesh, '', place, mesh=mesh, mat='strobe' if kind == 'strobe' else kind)]
+        if kind == 'strobe':                           # the clear dome its own node (the client lights it in a flash)
+            split_dome(out / f'{mesh}.bin', out / f'{mesh}_dome.bin', out / f'{mesh}_base.bin')
+            ns = [node(mesh, '', place, mesh=f'{mesh}_base', mat='strobe'), node('strobe_dome', '', place, mesh=f'{mesh}_dome', mat='strobe')]
+        else:
+            ns = [node(mesh, '', place, mesh=mesh, mat=kind)]
         if spec['front'] == 'z':                       # the lens: the front-most vertices; the beam straight ahead
             lens = V[V[:, 2] > V[:, 2].max() - 0.002]; at = np.r_[lens[:, :2].mean(0), V[:, 2].max() + 0.002]
             L = np.eye(4); L[:3, 3] = at
