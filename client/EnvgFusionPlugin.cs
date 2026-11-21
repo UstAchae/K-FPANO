@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.32";
+    public const string Version = "0.2.33";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -773,7 +773,7 @@ internal static class EnvgFusion
         _fuseDraw.SetRenderTarget(dest);
         _fuseDraw.SetViewport(new Rect(0f, 0f, dest.width, dest.height));
         _fuseDraw.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, pass);
-        DrawHeading(_fuseDraw, at, dest, settled);
+        DrawHeading(_fuseDraw, at, dest, settled, EyepieceLink.FusedRect.y * radius * share);
         Graphics.ExecuteCommandBuffer(_fuseDraw);
         // the screen's own draw keeps the field at the centre
         Material.SetVector(FieldAtId, Vector4.zero);
@@ -787,23 +787,26 @@ internal static class EnvgFusion
     }
     private static CommandBuffer? _fuseDraw;
 
-    // ---- the heading HUD (the F-PANO's digital compass): a ring above the thermal picture, top centre, with the
+    // ---- the heading HUD (the F-PANO's digital compass): a ring inside the thermal picture, top centre, with the
     // heading in degrees (turning right raises it) and a red tick on the ring where north lies from the view. North is
     // the map's own, as the game's compass has it (LevelSettings.NorthVector). Part of the thermal overlay: drawn only
-    // with it. Placed as on the maker's picture through the eyepiece: its centre 0.61 of the tube's circle above the
-    // axis, its radius 0.064 of it ----
+    // with it, lit as the ENVG-B's symbology (cyan-white, glowing). Its radius 0.064 of the tube's circle (as on the
+    // maker's picture through the eyepiece), just inside the thermal picture's top edge ----
     private static readonly int HudId = Shader.PropertyToID("_FpanoHud");
     private static readonly int HudBId = Shader.PropertyToID("_FpanoHudB");
     private static bool _loggedHeading;
-    private static void DrawHeading(CommandBuffer cb, Vector4 at, RenderTexture dest, float settled)
+    private static void DrawHeading(CommandBuffer cb, Vector4 at, RenderTexture dest, float settled, float halfHeight)
     {
         if (_main == null || _fuseQuad == null || Material == null || settled <= 0f || !Heading(_main, out float heading))
             return;
         float radius = Mathf.Max(at.z, 1e-3f);
         float aspect = dest.width / (float)Mathf.Max(dest.height, 1);
-        cb.SetGlobalVector(HudId, new Vector4(at.x, at.y + 0.61f * radius, 0.064f * radius, aspect));
+        float ring = 0.064f * radius;
+        // (with the thermal picture made small: no lower than its centre)
+        float above = Mathf.Max(halfHeight - ring - 0.035f * radius, 0f);
+        cb.SetGlobalVector(HudId, new Vector4(at.x, at.y + above, ring, aspect));
         int shown = Mathf.RoundToInt(heading) % 360;
-        cb.SetGlobalVector(HudBId, new Vector4(shown, -heading * Mathf.Deg2Rad, 0.9f * settled, dest.height));
+        cb.SetGlobalVector(HudBId, new Vector4(shown, -heading * Mathf.Deg2Rad, settled, dest.height));
         cb.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, 42);
         if (!_loggedHeading)
         {

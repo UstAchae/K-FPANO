@@ -1888,7 +1888,7 @@ Shader "Justachae/FPANO/Outline"
             ENDCG
         }
 
-        // 42: the heading HUD over the fused picture in the eyepieces, added like the overlay's own light: a ring
+        // 42: the heading HUD in the fused picture in the eyepieces, added light lit as the ENVG-B's symbology: a ring
         // around the heading in degrees (stroke digits), a red tick on the ring where north lies from the view
         Pass
         {
@@ -1930,18 +1930,19 @@ Shader "Justachae/FPANO/Outline"
                     return float4(0, 0, 0, 1);
                 float px = 1.0 / max(_FpanoHud.z * _FpanoHudB.w, 1.0);
                 float r = length(q);
-                float ring = saturate((0.055 - abs(r - 1.0)) / px + 0.5);
+                // signed distances to each shape's edge, in pixels, positive inside
+                float ringSd = (0.055 - abs(r - 1.0)) / px;
                 // north on the ring
                 float a = atan2(q.x, q.y) - _FpanoHudB.y;
                 a = abs(a - 6.2831853 * floor(a / 6.2831853 + 0.5));
-                float tick = saturate((0.2 - a) * r / px + 0.5) * saturate((0.1 - abs(r - 1.0)) / px + 0.5);
+                float tickSd = min((0.2 - a) * r, 0.1 - abs(r - 1.0)) / px;
                 // the digits and the degree sign, centred
                 int heading = (int)(_FpanoHudB.x + 0.5);
                 int count = heading >= 100 ? 3 : heading >= 10 ? 2 : 1;
                 float h = 0.44, gap = 0.3 * h, w = 0.5 * h;
                 float total = count * (w + gap) + 0.26 * h;
                 float x0 = -0.5 * total;
-                float text = 0.0;
+                float textSd = -1e3;
                 int div = count == 3 ? 100 : count == 2 ? 10 : 1;
                 [unroll] for (int k = 0; k < 3; k++)
                 {
@@ -1949,14 +1950,25 @@ Shader "Justachae/FPANO/Outline"
                     {
                         int digit = (heading / div) % 10;
                         float2 p = (q - float2(x0 + k * (w + gap), -0.5 * h)) / h;
-                        text = max(text, saturate((0.045 - digitDist(p, digit) * h) / px + 0.5));
+                        textSd = max(textSd, (0.045 - digitDist(p, digit) * h) / px);
                         div = max(div / 10, 1);
                     }
                 }
                 float2 deg = float2(x0 + count * (w + gap) + 0.12 * h, 0.5 * h - 0.12 * h);
-                text = max(text, saturate((0.035 - abs(length(q - deg) - 0.09 * h)) / px + 0.5));
-                float3 core = _EnvgCore.rgb;
-                float3 col = core * max(ring * (1.0 - tick), text) + float3(1.0, 0.12, 0.08) * tick;
+                textSd = max(textSd, (0.035 - abs(length(q - deg) - 0.09 * h)) / px);
+                // lit as the ENVG-B's symbology: a near-white core and a cyan glow falling off over a few pixels (its
+                // width a fifth of the text's em), gone before the shape's reach
+                float glowPx = max(0.22 * h / 0.7 / px, 0.5);
+                float sd = max(ringSd, textSd);
+                float core = saturate(sd + 0.5);
+                float beyond = saturate(-sd / (4.0 * glowPx));
+                float glow = exp(-max(-sd, 0.0) / glowPx) * (1.0 - beyond) * (1.0 - beyond) * (1.0 - core) * 0.55;
+                float3 col = float3(0.80, 1.00, 1.00) * core + float3(0.10, 0.75, 1.00) * glow;
+                // the north tick over the ring, red, lit the same way
+                float tCore = saturate(tickSd + 0.5);
+                float tBeyond = saturate(-tickSd / (4.0 * glowPx));
+                float tGlow = exp(-max(-tickSd, 0.0) / glowPx) * (1.0 - tBeyond) * (1.0 - tBeyond) * (1.0 - tCore) * 0.55;
+                col = col * (1.0 - tCore) + float3(1.0, 0.15, 0.10) * tCore + float3(1.0, 0.08, 0.05) * tGlow * 0.6;
                 return float4(col * _FpanoHudB.z, 1);
             }
             ENDCG
