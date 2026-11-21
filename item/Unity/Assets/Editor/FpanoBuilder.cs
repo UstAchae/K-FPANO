@@ -16,7 +16,7 @@ public static class FpanoBuilder {
  const string Src="Assets/Source",Gen="Assets/Generated";
  static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
  public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
- [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin,sideSkin,hidden;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;}
+ [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin,sideSkin,hidden;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;public string light;public float[] lightColor;public float intensity,range,angle;public bool ir;}
  [Serializable] public class Info {public string colour,item,root;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
 
  const float RotationSpeed=0.75187969f;  // the GPNVG-18's
@@ -54,7 +54,7 @@ public static class FpanoBuilder {
   File.WriteAllText(p,"Shader \"UstAchae/FPANO/Stub\" { Properties { _MainTex (\"m\", 2D) = \"white\" {} _SpecMap (\"s\", 2D) = \"white\" {} _BumpMap (\"b\", 2D) = \"bump\" {} _Color (\"c\", Color) = (1,1,1,1) } SubShader { Pass { Color (1,1,1,1) } } }");
   AssetDatabase.ImportAsset(p,ImportAssetOptions.ForceSynchronousImport);return AssetDatabase.LoadAssetAtPath<Shader>(p);
  }
- public static readonly string[] Items={"rails","battery","mount","goggle"};
+ public static readonly string[] Items={"rails","battery","mount","goggle","hl2a","mpls","strobe"};
  public static string BundleKey(string item,string colour)=>"ustachae_fpano/"+item+"_"+colour+".bundle";
 
  public static void Build(){
@@ -123,6 +123,15 @@ public static class FpanoBuilder {
     sr.localBounds=new Bounds(bones[1].InverseTransformPoint(go.transform.TransformPoint(mesh.bounds.center)),mesh.bounds.size);
     if(n.hidden)go.SetActive(false);renderers.Add(sr);
    }
+   else if(!string.IsNullOrEmpty(n.light)){
+    // A light of a RAILINK light's mode (split_items.py LIGHT_ITEMS): beam along local +z; IR ones as the game's IR
+    // illuminators (IkLight, red); white spots cast shadows as the game's flashlights.
+    var l=go.AddComponent<Light>();l.type=n.light=="spot"?LightType.Spot:LightType.Point;
+    l.color=new Color(n.lightColor[0],n.lightColor[1],n.lightColor[2],n.lightColor[3]);l.intensity=n.intensity;l.range=n.range;
+    if(l.type==LightType.Spot){l.spotAngle=n.angle;l.innerSpotAngle=Mathf.Min(6f,n.angle);}
+    l.shadows=l.type==LightType.Spot&&!n.ir?LightShadows.Soft:LightShadows.None;l.shadowBias=0.015f;l.shadowNormalBias=0.1f;l.shadowNearPlane=0.1f;l.bounceIntensity=0f;
+    if(n.ir)go.AddComponent<IkLight>().Light=l;
+   }
    else if(n.mesh!=""){
     var mesh=ReadMesh(src+"/"+n.mesh+".bin",n.mesh,gen);
     go.AddComponent<MeshFilter>().sharedMesh=mesh;
@@ -141,6 +150,10 @@ public static class FpanoBuilder {
    root.AddComponent<NightVisionMount>().Set(rot);
   }
   if(item=="goggle")Goggle(root,made[DeviceNode],info);
+  if(made.ContainsKey("mode_000")){   // a RAILINK light: the game's light controller; every mode but "off" starts hidden
+   root.AddComponent<TacticalComboVisualController>();
+   foreach(var m in made.Where(kv=>kv.Key.StartsWith("mode_")&&kv.Key!="mode_000"))m.Value.gameObject.SetActive(false);
+  }
   var b=all[0].bounds;foreach(var r in all)b.Encapsulate(r.bounds);
   var pivot=root.AddComponent<PreviewPivot>();
   pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
@@ -149,6 +162,12 @@ public static class FpanoBuilder {
    pivot.pivotPosition=new Vector3(-0.00038808584f,-0.013348266f,-0.08924666f);
    lodGroup.localReferencePoint=new Vector3(-0.00038808584f,-0.013348244f,-0.089246705f);
    pivot.Icon=IconFraming.Fit(root,pivot.Icon,2f);
+  }
+  if(item=="hl2a"||item=="mpls"||item=="strobe"){  // a 1x1 light, seen as the rails' icon sees it, all of it centred
+   pivot.pivotRotation=new Quaternion(0f,1f,0f,-4.371139e-08f);
+   var view=item=="strobe"?new Quaternion(0.065263f,-0.858616f,-0.113039f,0.495722f)   // the strobe from outside, its dome
+                          :new Quaternion(-0.08213679f,-0.9169861f,-0.29617643f,0.2543021f);
+   pivot.Icon=IconFraming.Fit(root,new PreviewPivot.IconSettings{rotation=view,perspective=15,orthographicSize=10},1f);
   }
   if(item=="rails"){  // a 2x1 item seen as the FAST MT's icon sees its helmet (the rails as fitted there), all of it centred
    pivot.Icon=IconFraming.Fit(root,new PreviewPivot.IconSettings{rotation=new Quaternion(-0.08213679f,-0.9169861f,-0.29617643f,0.2543021f),perspective=15,orthographicSize=10},2f);

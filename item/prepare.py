@@ -85,9 +85,13 @@ SIDE_FROM, SIDE_TO = 0.045, 0.075                # rails' skin weights: the grou
 RAILINK_TEX = Path(r'D:/games/models/RAILINK/extracted/Helmet_OpsCore_RAILINK_v02/Textures/PBR_Helmet_OpsCore_RAILINK_SHSF_tx')
 RAILINK = {'rails': ('Helmet_OpsCore_RAILINK_SHSF_Rail', 0), 'inside': ('Helmet_OpsCore_RAILINK_SHSF_Rail', 1),
            'battery': ('Helmet_OpsCore_RAILINK_SHSF_Battery', 0)}  # atlas: (part, material slot)
-RAILINK_STEM = {'rails': 'Rails', 'inside': 'Inside', 'battery': 'Battery'}
+# The RAILINK's lights, each its own item on the rails (user: "做成 2"): the SureFire HL2-A (model: right front), the
+# Princeton Tec MPLS ("Light", left front) and the two HEL-STAR strobes (rear sides), where the model has them.
+LIGHTS = {'hl2a': 'Helmet_OpsCore_RAILINK_SHSF_HL2A', 'mpls': 'Helmet_OpsCore_RAILINK_SHSF_Light',
+          'strobe_L': 'Helmet_OpsCore_RAILINK_SHSF_Strobe_L', 'strobe_R': 'Helmet_OpsCore_RAILINK_SHSF_Strobe_R'}
+RAILINK_STEM = {'rails': 'Rails', 'inside': 'Inside', 'battery': 'Battery', 'hl2a': 'HL2A', 'mpls': 'Light', 'strobe': 'Strobe'}
 ATLASES = {'body': ('NVG_L3Harris_FPGPNVG', BODY), 'mount': ('NVG_Mount_L3Harris_FPG21', BASE + FRAME + ARM),
-           'rails': None, 'inside': None, 'battery': None}
+           'rails': None, 'inside': None, 'battery': None, 'hl2a': None, 'mpls': None, 'strobe': None}
 
 
 def qmat(q):
@@ -122,6 +126,13 @@ def mat2quat(R):
     z = np.sqrt(max(0.0, 1 - R[0, 0] - R[1, 1] + R[2, 2])) / 2
     x = np.copysign(x, R[2, 1] - R[1, 2]); y = np.copysign(y, R[0, 2] - R[2, 0]); z = np.copysign(z, R[1, 0] - R[0, 1])
     q = np.array([x, y, z, w]); q /= np.linalg.norm(q)
+    if not np.allclose(qmat(q), R, atol=1e-6):        # w ~ 0 (a half turn): the signs from the largest component
+        k = int(np.argmax([x * x, y * y, z * z, w * w])); M = R
+        if k == 0: q = np.array([1 + M[0, 0] - M[1, 1] - M[2, 2], M[0, 1] + M[1, 0], M[0, 2] + M[2, 0], M[2, 1] - M[1, 2]])
+        elif k == 1: q = np.array([M[0, 1] + M[1, 0], 1 - M[0, 0] + M[1, 1] - M[2, 2], M[1, 2] + M[2, 1], M[0, 2] - M[2, 0]])
+        elif k == 2: q = np.array([M[0, 2] + M[2, 0], M[1, 2] + M[2, 1], 1 - M[0, 0] - M[1, 1] + M[2, 2], M[1, 0] - M[0, 1]])
+        else: q = np.array([M[2, 1] - M[1, 2], M[0, 2] - M[2, 0], M[1, 0] - M[0, 1], 1 + M[0, 0] + M[1, 1] + M[2, 2]])
+        q /= np.linalg.norm(q)
     assert np.allclose(qmat(q), R, atol=1e-6)
     return q
 
@@ -270,6 +281,12 @@ def rig(parts, colour, out):
         if atlas != 'battery':
             node.update(sideSkin=True, bones=['fpano_railink_back', 'fpano_railink_L', 'fpano_railink_R'], sideFrom=SIDE_FROM, sideTo=SIDE_TO)
         nodes.append(node)
+    # The lights' meshes in the root frame (not nodes of the F-PANO: split_items.py makes them items of their own).
+    for name, part in LIGHTS.items():
+        d = np.load(parts.parent / 'railink' / f'{part}.npz')
+        p = to_device('fde', d['pos'].astype(np.float64)); n = mirror(d['nor'].astype(np.float64)); u = d['uv']
+        idx = np.arange(len(p)).reshape(-1, 3)[:, [0, 2, 1]].ravel()  # the mirror reverses the winding
+        write_mesh(out / f'fpano_light_{name}.bin', seated(p[idx]), n[idx] @ Rdev.T, u[idx])
     q_on = mat2quat(Rdev)
     dq = qmul(GP_OFF, (-GP_ON[0], -GP_ON[1], -GP_ON[2], GP_ON[3]))
     sgn = np.sign((2 * np.arctan2(dq[0], dq[3]) + np.pi) % (2 * np.pi) - np.pi)
@@ -290,7 +307,7 @@ def channel(path, size):
 def atlas_files(tex, atlas, colour):
     """(base colour file, file of a shared map by its kind) of an atlas: the F-PANO's own sets are named by colour
     (FDE carries the shared maps), the RAILINK's have no colour in the FDE names and "BLK" in the black base colour."""
-    if atlas in RAILINK:
+    if atlas in RAILINK_STEM:
         stem = f'Helmet_OpsCore_RAILINK_SHSF_{RAILINK_STEM[atlas]}'
         return RAILINK_TEX / f'{stem}_{"BLK_" if colour == "blk" else ""}BaseColor.png', lambda k: RAILINK_TEX / f'{stem}_{k}.png'
     stem = ATLASES[atlas][0]

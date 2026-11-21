@@ -32,12 +32,12 @@
     "en": [
      "Ops-Core RAILINK powered rails with Battery Pack+",
      "RAILINK",
-     "Ops-Core ARC rails with the RAILINK Battery Pack+ (six AA lithium cells) on the back of the helmet; they carry power and data to the devices on the rails. They take the place of the helmet's own rails and headset mount: a helmet headset, the F-PANO goggle and two ARC rail adapters fit on them. With the rails on, the helmet takes no other night vision device; the F-PANO gets its power from them."
+     "Ops-Core ARC rails with the RAILINK Battery Pack+ (six AA lithium cells) on the back of the helmet; they carry power and data to the devices on the rails. They take the place of the helmet's own rails and headset mount: a helmet headset, the F-PANO goggle, two ARC rail adapters, two front lights (SureFire HL2-A, Princeton Tec MPLS) and two HEL-STAR strobes fit on them. With the rails on, the helmet takes no other night vision device; the F-PANO gets its power from them."
     ],
     "ch": [
      "Ops-Core RAILINK 供电导轨（带 Battery Pack+ 电池盒）",
      "RAILINK",
-     "Ops-Core ARC 导轨，后部带 RAILINK Battery Pack+ 电池盒（6 节 AA 锂电池），沿导轨为上面的设备供电、传输数据。它取代头盔自带的导轨和耳机座：上面可以装头盔耳机、F-PANO 夜视仪和两个 ARC 导轨转接座。装上导轨后，头盔不能再装其他夜视仪；F-PANO 由它供电。"
+     "Ops-Core ARC 导轨，后部带 RAILINK Battery Pack+ 电池盒（6 节 AA 锂电池），沿导轨为上面的设备供电、传输数据。它取代头盔自带的导轨和耳机座：上面可以装头盔耳机、F-PANO 夜视仪、两个 ARC 导轨转接座、前部两盏灯（SureFire HL2-A、Princeton Tec MPLS）和后部两个 HEL-STAR 频闪灯。装上导轨后，头盔不能再装其他夜视仪；F-PANO 由它供电。"
     ]
    }
   },
@@ -101,6 +101,75 @@
      "L3Harris F-PANO 融合全景夜视仪",
      "F-PANO",
      "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。自带可调、可上翻的头盔支架；可装在能装 RAILINK 导轨的头盔上，也可直接装在导轨上。由 RAILINK 导轨供电：头盔上没有导轨时没有画面。"
+    ]
+   }
+  },
+  "hl2a": {
+   "clone": "57d17c5e2459775a5c57d17d",
+   "handbook": "5b5f73ab86f774094242f195",
+   "price": 38000,
+   "usd": 380,
+   "loyalty": 2,
+   "weight": 0.1,
+   "width": 1,
+   "height": 1,
+   "modes": 3,
+   "locales": {
+    "en": [
+     "SureFire HL2-A helmet light",
+     "HL2-A",
+     "A SureFire helmet light for the Ops-Core RAILINK rails, powered by their Battery Pack+. Modes: white high, white low, infrared (seen only through night vision). Toggle and switch modes with the head light keys."
+    ],
+    "ch": [
+     "SureFire HL2-A 头盔灯",
+     "HL2-A",
+     "装在 Ops-Core RAILINK 导轨上的 SureFire 头盔灯，由导轨的电池盒供电。模式：白光强光、白光弱光、红外（只有夜视仪能看到）。用头灯按键开关、切换模式。"
+    ]
+   }
+  },
+  "mpls": {
+   "clone": "57d17c5e2459775a5c57d17d",
+   "handbook": "5b5f73ab86f774094242f195",
+   "price": 16000,
+   "usd": 160,
+   "loyalty": 1,
+   "weight": 0.03,
+   "width": 1,
+   "height": 1,
+   "modes": 5,
+   "locales": {
+    "en": [
+     "Princeton Tec MPLS helmet light",
+     "MPLS",
+     "A small Princeton Tec Modular Personal Lighting System light for the Ops-Core RAILINK rails, for close work and marking. Modes: white, red, green, blue, infrared (seen only through night vision). Toggle and switch modes with the head light keys."
+    ],
+    "ch": [
+     "Princeton Tec MPLS 头盔灯",
+     "MPLS",
+     "装在 Ops-Core RAILINK 导轨上的 Princeton Tec 模块化小灯，用于近距离照明和标识。模式：白光、红光、绿光、蓝光、红外（只有夜视仪能看到）。用头灯按键开关、切换模式。"
+    ]
+   }
+  },
+  "strobe": {
+   "clone": "57d17c5e2459775a5c57d17d",
+   "handbook": "5b5f73ab86f774094242f195",
+   "price": 22000,
+   "usd": 220,
+   "loyalty": 2,
+   "weight": 0.03,
+   "width": 1,
+   "height": 1,
+   "modes": 2,
+   "locales": {
+    "en": [
+     "HEL-STAR 6 identification strobe",
+     "HEL-STAR",
+     "A HEL-STAR 6 identification strobe for the rear of the Ops-Core RAILINK rails. Modes: visible strobe, infrared strobe (seen only through night vision). Toggle and switch modes with the head light keys."
+    ],
+    "ch": [
+     "HEL-STAR 6 识别频闪灯",
+     "HEL-STAR",
+     "装在 Ops-Core RAILINK 导轨后部的 HEL-STAR 6 识别频闪灯。模式：可见光频闪、红外频闪（只有夜视仪能看到）。用头灯按键开关、切换模式。"
     ]
    }
   }
@@ -171,6 +240,48 @@
    "id": "6a4f9a400000000000000002",
    "assort": "6a4f9a400000000000000102",
    "bundle": "ustachae_fpano/goggle_blk.bundle"
+  },
+  {
+   "kind": "hl2a",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000041",
+   "assort": "6a4f9a400000000000000141",
+   "bundle": "ustachae_fpano/hl2a_fde.bundle"
+  },
+  {
+   "kind": "hl2a",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000042",
+   "assort": "6a4f9a400000000000000142",
+   "bundle": "ustachae_fpano/hl2a_blk.bundle"
+  },
+  {
+   "kind": "mpls",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000051",
+   "assort": "6a4f9a400000000000000151",
+   "bundle": "ustachae_fpano/mpls_fde.bundle"
+  },
+  {
+   "kind": "mpls",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000052",
+   "assort": "6a4f9a400000000000000152",
+   "bundle": "ustachae_fpano/mpls_blk.bundle"
+  },
+  {
+   "kind": "strobe",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000061",
+   "assort": "6a4f9a400000000000000161",
+   "bundle": "ustachae_fpano/strobe_fde.bundle"
+  },
+  {
+   "kind": "strobe",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000062",
+   "assort": "6a4f9a400000000000000162",
+   "bundle": "ustachae_fpano/strobe_blk.bundle"
   }
  ],
  "slotIds": "6a4f9a4000000000000002",
@@ -188,5 +299,21 @@
   "65719f0775149d62ce0a670b",
   "68a9b3ca0a9c4f9398032c46",
   "68a9b5a5863d2a71fa0494a6"
- ]
+ ],
+ "railLights": {
+  "mod_flashlight_000": [
+   "hl2a",
+   "mpls"
+  ],
+  "mod_flashlight_001": [
+   "hl2a",
+   "mpls"
+  ],
+  "mod_tactical_000": [
+   "strobe"
+  ],
+  "mod_tactical_001": [
+   "strobe"
+  ]
+ }
 }

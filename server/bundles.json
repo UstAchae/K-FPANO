@@ -1,6 +1,27 @@
 {
   "manifest": [
     {
+      "key": "ustachae_fpano/hl2a_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/mpls_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/strobe_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
       "key": "ustachae_fpano/rails_fde.bundle",
       "dependencyKeys": [
         "shaders",
@@ -23,6 +44,27 @@
     },
     {
       "key": "ustachae_fpano/goggle_fde.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/hl2a_blk.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/mpls_blk.bundle",
+      "dependencyKeys": [
+        "shaders",
+        "cubemaps"
+      ]
+    },
+    {
+      "key": "ustachae_fpano/strobe_blk.bundle",
       "dependencyKeys": [
         "shaders",
         "cubemaps"

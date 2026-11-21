@@ -114,7 +114,13 @@ public class FpanoMod(
                     slots.Add(Slot("mod_nvg", Ids(made["goggle"])));      // the F-PANO on the rails (user: "让 F-PANO 也能装在 RALINK 上面")
                     slots.Add(Slot("mod_mount_000", Strs(db["railAdapters"])));
                     slots.Add(Slot("mod_mount_001", Strs(db["railAdapters"])));
+                    // the RAILINK lights (user: "做成 2"): two front light slots, two rear strobe slots
+                    foreach (var (slotName, lightKinds) in db["railLights"]!.AsObject())
+                        slots.Add(Slot(slotName, Ids(lightKinds!.AsArray().SelectMany(lk => made.GetValueOrDefault(lk!.GetValue<string>()) ?? []))));
                     props["ConflictingItems"] = Ids(otherNvgs);
+                    break;
+                case "hl2a": case "mpls": case "strobe":
+                    props["ModesCount"] = k["modes"]!.GetValue<int>();   // mode_001..mode_00N in the prefab
                     break;
                 case "mount":
                     slots.Add(Slot("mod_nvg", Ids(made["goggle"])));
