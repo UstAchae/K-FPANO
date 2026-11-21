@@ -102,7 +102,7 @@ internal static class FpanoGlow
 
 // The CORE Survival HEL-STAR rail strobe on the RAILINK flashes as in the user's videos: every strobe together, from
 // one clock, 100 ms on in each 1.03 s (at least one frame a flash, however slow the frame). During the flash, and only
-// then, the mode's own light is on and a glow is drawn at the lens ("strobe_lens"): the clear dome lit white in the
+// then, a glow is drawn (and the mode's light, if the prefab has one, is on) at the lens ("strobe_lens"): the clear dome lit white in the
 // visible modes; in the IR modes the night-vision bloom with long star spikes, only while night vision is on. Dim modes
 // give a smaller, weaker flash. Found once, when the strobe's model is made; nothing searched or allocated per frame.
 internal sealed class FpanoStrobe : MonoBehaviour
@@ -187,16 +187,16 @@ internal sealed class FpanoLamp : MonoBehaviour
     // HL2-A: mode_001 IR low, 002 IR high, 003 white low, 004 white high
     private static readonly FpanoGlow.Look[] Hl2a =
     {
-        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.6f, Size = 0.018f, Shape = new Vector4(0.45f, 0.8f, 0f, 0f), Forward = 2f },
-        new FpanoGlow.Look { Ir = true, Colour = Color.white * 1.5f, Size = 0.022f, Shape = new Vector4(0.45f, 0.8f, 0f, 0f), Forward = 2f },
-        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 1.0f, Size = 0.020f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 2f },
-        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 2.0f, Size = 0.025f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.6f, Size = 0.012f, Shape = new Vector4(0.45f, 0.5f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 1.5f, Size = 0.014f, Shape = new Vector4(0.45f, 0.5f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 1.0f, Size = 0.012f, Shape = new Vector4(0.5f, 0.5f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 2.0f, Size = 0.015f, Shape = new Vector4(0.5f, 0.5f, 0f, 0f), Forward = 2f },
     };
     // MPLS: mode_001 red, 002 white
     private static readonly FpanoGlow.Look[] Mpls =
     {
-        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.06f, 0.03f) * 1.5f, Size = 0.010f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 1.5f },
-        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.92f) * 1.2f, Size = 0.010f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 1.5f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.06f, 0.03f) * 1.5f, Size = 0.007f, Shape = new Vector4(0.5f, 0.5f, 0f, 0f), Forward = 1.5f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.92f) * 1.2f, Size = 0.007f, Shape = new Vector4(0.5f, 0.5f, 0f, 0f), Forward = 1.5f },
     };
 
     private FpanoGlow.Look[] _looks = Hl2a;
