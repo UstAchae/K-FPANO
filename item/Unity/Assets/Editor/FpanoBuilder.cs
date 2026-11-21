@@ -148,7 +148,10 @@ public static class FpanoBuilder {
   if(item=="goggle"){  // the GPNVG-18's pivot and LOD reference; the icon framed on the goggle itself (IconFraming)
    pivot.pivotPosition=new Vector3(-0.00038808584f,-0.013348266f,-0.08924666f);
    lodGroup.localReferencePoint=new Vector3(-0.00038808584f,-0.013348244f,-0.089246705f);
-   pivot.Icon=IconFraming.Frame(root,pivot.Icon,r=>r.name.StartsWith(DeviceNode)||r.name.StartsWith("nvg_fpano_glass"),2f);
+   pivot.Icon=IconFraming.Fit(root,pivot.Icon,2f);
+  }
+  if(item=="rails"){  // a 2x1 item seen as the FAST MT's icon sees its helmet (the rails as fitted there), all of it centred
+   pivot.Icon=IconFraming.Fit(root,new PreviewPivot.IconSettings{rotation=new Quaternion(-0.08213679f,-0.9169861f,-0.29617643f,0.2543021f),perspective=15,orthographicSize=10},2f);
   }
   if(item=="mount"){  // as the Norotos TATM (a 1x1 mount): its view angles and framing
    pivot.pivotRotation=new Quaternion(0f,1f,0f,-4.371139e-08f);pivot.scale=Vector3.one*1.4285715f;
