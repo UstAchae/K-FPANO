@@ -19,6 +19,12 @@ GLASS = ((0.02, 0.02, 0.022), (1.0, 1.0, 1.0), 3.2, 2.4)  # tint, spec colour, _
 # body's (alpha ~0.1): at 0.8 the lenses glowed lilac-white in the dark hideout. A faint blue-violet coating instead.
 GLASS_REFLECT = (0.09, 0.14, 0.13, 1.0)  # the eyepieces' blue-green coating, as in the user's reference photos
 DEPENDENCIES = ['shaders', 'cubemaps']
+# The game's flashlight beam patterns (light cookies), as its own lights use them: weapon_flashlight_cookie on the white
+# lights (UltraFire, SureFire XC1), FlashlightCookie on the IR illuminators (Zenit Klesch-2IKS). Without one a spot is a
+# hard-edged cone (user, 0.2.17: "另外两个灯的光感觉也不是真实的光").
+COOKIE_KEY = 'assets/standard assets/effects/lightcookies/textures/flashlightcookie.bundle'
+COOKIE_CAB = 'archive:/CAB-08e6cb4916ce65aa8731bb634beb1c12/CAB-08e6cb4916ce65aa8731bb634beb1c12'
+COOKIE_WHITE, COOKIE_IR = -859247168232836953, -4367345249859656561
 OUT = ITEM.parent / 'server'
 
 env = UnityPy.Environment()
@@ -75,12 +81,20 @@ for key, expected in KEYS:
             kind = t['m_Name'].replace('mat_', '')  # CreateAsset renamed them after the asset file
             finalize_material(o, t, kind == 'glass'); done.add(kind)
     assert done == expected, (key, done)
+    lit = 0
+    for o in refs.objects(built):
+        if o.type.name == 'Light':
+            t = o.read_typetree()
+            if t['m_Type'] != 0: continue                          # spots only
+            c = t['m_Color']; ir = c['r'] > 0.99 and c['g'] < 0.01 and c['b'] < 0.01
+            t['m_Cookie'] = {'m_FileID': refs.external_id(o.assets_file, COOKIE_CAB), 'm_PathID': COOKIE_IR if ir else COOKIE_WHITE}
+            o.save_typetree(t); lit += 1
     out = OUT / 'bundles' / key
     out.parent.mkdir(parents=True, exist_ok=True)
     for name, f in list(built.files.items()):
         if str(name).endswith('.resS'): built.files[name] = refs.Stored(f.bytes, getattr(f, 'flags', 0))
     out.write_bytes(built.save(packer='lz4'))
-    manifest.append({'key': key, 'dependencyKeys': DEPENDENCIES})
+    manifest.append({'key': key, 'dependencyKeys': DEPENDENCIES + ([COOKIE_KEY] if lit else [])})
 
     check = UnityPy.Environment().load_file(out.read_bytes(), name=key)
     for o in refs.objects(check):

@@ -4,14 +4,16 @@
       "key": "ustachae_fpano/hl2a_fde.bundle",
       "dependencyKeys": [
         "shaders",
-        "cubemaps"
+        "cubemaps",
+        "assets/standard assets/effects/lightcookies/textures/flashlightcookie.bundle"
       ]
     },
     {
       "key": "ustachae_fpano/mpls_fde.bundle",
       "dependencyKeys": [
         "shaders",
-        "cubemaps"
+        "cubemaps",
+        "assets/standard assets/effects/lightcookies/textures/flashlightcookie.bundle"
       ]
     },
     {
@@ -53,14 +55,16 @@
       "key": "ustachae_fpano/hl2a_blk.bundle",
       "dependencyKeys": [
         "shaders",
-        "cubemaps"
+        "cubemaps",
+        "assets/standard assets/effects/lightcookies/textures/flashlightcookie.bundle"
       ]
     },
     {
       "key": "ustachae_fpano/mpls_blk.bundle",
       "dependencyKeys": [
         "shaders",
-        "cubemaps"
+        "cubemaps",
+        "assets/standard assets/effects/lightcookies/textures/flashlightcookie.bundle"
       ]
     },
     {

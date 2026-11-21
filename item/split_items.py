@@ -52,11 +52,10 @@ LIGHT_ITEMS = {
     # bright; the client flashes the "strobe_light"s (both strobes together, as the user's videos) and draws the lens
     # glow at "strobe_lens" (facing out of the strobe, local +z)
     'strobe': {'mesh': 'fpano_light_strobe_L', 'turn': False, 'front': 'out', 'modes': [
-        # a marker, not a lamp: it lights only what is close (0.2.17's lit the whole player: user, "闪的还很浮夸")
-        dict(light='point', lightColor=[1, 0, 0, 1], intensity=0.4, range=3.0, angle=0.0, ir=True, strobe=True),
-        dict(light='point', lightColor=[1, 0, 0, 1], intensity=0.8, range=6.0, angle=0.0, ir=True, strobe=True),
-        dict(light='point', lightColor=WHITE, intensity=0.25, range=1.5, angle=0.0, strobe=True),
-        dict(light='point', lightColor=WHITE, intensity=0.5, range=3.0, angle=0.0, strobe=True)]},
+        # no scene light: only the lens glow comes and goes (user: "那个闪的光是什么？感觉根本就是不是物体发出的光，让那个
+        # 光晕出现再消失不久行了？"); the modes keep an empty strobe_light each, the client reads the mode from them
+        dict(light='', ir=True, strobe=True), dict(light='', ir=True, strobe=True),
+        dict(light='', strobe=True), dict(light='', strobe=True)]},
 }
 LIGHT_SLOTS = {'hl2a': ('mod_flashlight_000', 'mod_flashlight_001'), 'strobe': ('mod_tactical_000', 'mod_tactical_001')}
 

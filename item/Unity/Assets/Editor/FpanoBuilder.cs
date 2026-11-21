@@ -128,7 +128,7 @@ public static class FpanoBuilder {
     // illuminators (IkLight, red); white spots cast shadows as the game's flashlights.
     var l=go.AddComponent<Light>();l.type=n.light=="spot"?LightType.Spot:LightType.Point;
     l.color=new Color(n.lightColor[0],n.lightColor[1],n.lightColor[2],n.lightColor[3]);l.intensity=n.intensity;l.range=n.range;
-    if(l.type==LightType.Spot){l.spotAngle=n.angle;l.innerSpotAngle=Mathf.Min(6f,n.angle);}
+    if(l.type==LightType.Spot){l.spotAngle=n.angle;l.innerSpotAngle=Mathf.Min(2f,n.angle);}  // as the game's flashlights (2 deg), their cookie shapes the beam
     l.shadows=l.type==LightType.Spot&&!n.ir?LightShadows.Soft:LightShadows.None;l.shadowBias=0.015f;l.shadowNormalBias=0.1f;l.shadowNearPlane=0.1f;l.bounceIntensity=0f;
     if(n.ir)go.AddComponent<IkLight>().Light=l;
    }
