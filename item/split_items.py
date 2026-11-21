@@ -85,7 +85,7 @@ def split(out, info):
     # placeholder socket the client rebinds to the rails' socket.
     goggle = [dict(by[n]) for n in mount_names] + [dict(dev), dict(by['nvg_fpano_glass_LOD0'])]
     goggle.append(node('fpano_power_socket', '', W['fpano_power_socket']))
-    goggle.append(dict(by['fpano_power_cable']))
+    goggle.append(dict(by['fpano_power_cable'], hidden=True))  # shown by the client once bound to the rails' socket
     # rails: the group, its bones, the rails and inner parts, the socket; slot nodes
     rails = [dict(by[n]) for n in ('fpano_railink', 'fpano_railink_L', 'fpano_railink_R', 'fpano_railink_back',
                                    'fpano_power_socket', 'fpano_railink_rails', 'fpano_railink_inside')]
@@ -110,7 +110,9 @@ def split(out, info):
         env = UnityPy.load(str(WIN / path))
         t = next(o.read() for o in env.objects if o.type.name == 'Transform' and o.read().m_GameObject.read().m_Name == slot)
         q = t.m_LocalRotation; p = t.m_LocalPosition
-        for i in ids: heads[i] = {'pos': [p.x, p.y, p.z], 'rot': [q.x, q.y, q.z, q.w], 'frame': 'helmet root'}
+        gi, _ = group_inv(tpl); m = unscaled(gi @ helmet_slots(path)[slot])   # on rails with no helmet: as on its own helmet's rails
+        for i in ids: heads[i] = {'pos': [p.x, p.y, p.z], 'rot': [q.x, q.y, q.z, q.w], 'frame': 'helmet root',
+                                  'onRails': {'pos': [float(v) for v in m[:3, 3]], 'rot': mat2quat(m[:3, :3]).tolist(), 'frame': 'fpano_railink local'}}
     (ITEM / 'railink_headsets.json').write_text(json.dumps(heads, indent=1))
     rac = helmet_slots(FAST)['mod_equipment_001']
     heads['5a16b9fffcdbcb0176308b34'] = node('mod_equipment', 'fpano_railink', unscaled(Lgi @ rac))

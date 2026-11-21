@@ -16,7 +16,7 @@ public static class FpanoBuilder {
  const string Src="Assets/Source",Gen="Assets/Generated";
  static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
  public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
- [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin,sideSkin;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;}
+ [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin,sideSkin,hidden;public string[] bones;public float[] weightCentre;public float weightNear,weightFar,sideFrom,sideTo;}
  [Serializable] public class Info {public string colour,item,root;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
 
  const float RotationSpeed=0.75187969f;  // the GPNVG-18's
@@ -119,7 +119,7 @@ public static class FpanoBuilder {
     var sr=go.AddComponent<SkinnedMeshRenderer>();sr.sharedMesh=mesh;sr.bones=bones;sr.rootBone=bones[1];sr.sharedMaterial=mats[n.mat];
     sr.shadowCastingMode=ShadowCastingMode.On;sr.receiveShadows=true;sr.updateWhenOffscreen=false;sr.quality=SkinQuality.Bone2;
     sr.localBounds=new Bounds(bones[1].InverseTransformPoint(go.transform.TransformPoint(mesh.bounds.center)),mesh.bounds.size+Vector3.one*0.3f);
-    renderers.Add(sr);
+    sr.enabled=!n.hidden;renderers.Add(sr);
    }
    else if(n.mesh!=""){
     var mesh=ReadMesh(src+"/"+n.mesh+".bin",n.mesh,gen);
@@ -143,6 +143,10 @@ public static class FpanoBuilder {
   var pivot=root.AddComponent<PreviewPivot>();
   pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
   pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(-0.049385615f,-0.94817758f,-0.25407037f,0.1843058f),boundsScale=1.8080130f,perspective=15,orthographicSize=10};
+  if(item=="goggle"){  // exactly the GPNVG-18's framing (its device sits where the GPNVG-18's does): pivot and LOD reference
+   pivot.pivotPosition=new Vector3(-0.00038808584f,-0.013348266f,-0.08924666f);
+   lodGroup.localReferencePoint=new Vector3(-0.00038808584f,-0.013348244f,-0.089246705f);
+  }
   if(item=="mount"){  // as the Norotos TATM (a 1x1 mount): its view angles and framing
    pivot.pivotRotation=new Quaternion(0f,1f,0f,-4.371139e-08f);pivot.scale=Vector3.one*1.4285715f;
    pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(0f,0.94551843f,0f,-0.3255687f),boundsScale=0.9000013f,perspective=15,orthographicSize=10};
