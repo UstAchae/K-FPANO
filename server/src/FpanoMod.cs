@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.38");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.39");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -77,14 +77,10 @@ public class FpanoMod(
         JsonArray Ids(IEnumerable<MongoId> ids) { var a = new JsonArray(); foreach (var i in ids) a.Add(i.ToString()); return a; }
         JsonArray Strs(JsonNode? n) { var a = new JsonArray(); foreach (var x in n!.AsArray()) a.Add(x!.GetValue<string>()); return a; }
 
-        // Every NVG and NVG mount that some item's mod_nvg takes, ours left out: the rails conflict with them all.
-        var ours = made.Values.SelectMany(v => v).ToHashSet();
-        var otherNvgs = new HashSet<MongoId>();
-        foreach (var it in templateTable.Items.Values)
-            foreach (var s in it.Properties?.Slots ?? [])
-                if (s.Name == "mod_nvg")
-                    foreach (var f in s.Properties?.Filters ?? [])
-                        foreach (var fid in f.Filter ?? []) if (!ours.Contains(fid)) otherNvgs.Add(fid);
+        // The rails conflict only with the GPNVG-18 and the K-ENVG-B goggles (user: "RALINK 应该只和 GPVNG-18 和 ENVG-B 冲突，
+        // 其他的夜视仪支架不冲突"); 0.2.38 and before took every NVG and mount any mod_nvg holds. The ENVG-B ids are fixed
+        // (K-ENVG-B may load after us: the rails list them either way).
+        var otherNvgs = db["railNvgConflicts"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
 
         int created = 0;
         foreach (var e in entries)
