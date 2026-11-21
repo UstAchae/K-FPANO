@@ -678,7 +678,8 @@ internal static class FpanoRailink
     private static bool HoldsOther(EFT.InventoryLogic.Slot? slot, EFT.InventoryLogic.Item item) =>
         slot?.ContainedItem != null && !ReferenceEquals(slot.ContainedItem, item) && NeedsRails(slot.ContainedItem);
 
-    // ---- the rule: one F-PANO a helmet (its own mod_nvg or the rails' one, not both) ----
+    // ---- the rules: one F-PANO a helmet (its own mod_nvg or the rails' one, not both); with the rails, adapters only on
+    // their two mounts ----
     private static void AfterCheckConditions(EFT.InventoryLogic.Slot __instance, EFT.InventoryLogic.Item item, bool ignoreRestrictions, ref Option<bool> __result)
     {
         try
@@ -699,11 +700,20 @@ internal static class FpanoRailink
                 EFT.InventoryLogic.Item? carried = SlotNamed(item, "mod_nvg")?.ContainedItem;
                 second = carried != null && NeedsRails(carried) && HoldsOther(SlotNamed(__instance.ParentItem, "mod_nvg"), carried);
             }
-            if (!second)
+            // the adapters: with the rails on, only their two mounts (left, right) take one; the helmet's own mod_mount
+            // sits on its hidden rail under one of them, so it takes nothing, and rails don't go onto a helmet whose own
+            // mod_mount holds something
+            bool mount = false;
+            if (__instance.ID == "mod_mount" && !IsRails(__instance.ParentItem) && RailsOn(__instance.ParentItem, out _) != null)
+                mount = true;
+            else if (IsRails(item) && SlotNamed(__instance.ParentItem, "mod_mount")?.ContainedItem != null)
+                mount = true;
+            if (!second && !mount)
                 return;
             __result = new EFT.InventoryLogic.Slot.ItemFiltersWontAllowError(item, __instance);
-            if (_logged.Add("refused-second"))
-                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: a second F-PANO on one helmet refused");
+            if (_logged.Add(second ? "refused-second" : "refused-mount"))
+                EnvgFusionPlugin.Log?.LogInfo(second ? "F-PANO RAILINK: a second F-PANO on one helmet refused"
+                    : "F-PANO RAILINK: the helmet's own mod_mount and the RAILINK together refused (adapters go on the RAILINK's two mounts)");
         }
         catch (System.Exception) { }
     }
