@@ -500,6 +500,8 @@ internal static class FpanoRailink
                 return;
             if (FpanoStrobe.IsStrobe(item))
                 FpanoStrobe.Attach(itemView);
+            else if (FpanoLamp.IsLamp(item))
+                FpanoLamp.Attach(itemView, item);
             int kind = Kind(item);
             if (kind == 0)
             {
@@ -545,6 +547,8 @@ internal static class FpanoRailink
                 return;
             if (FpanoStrobe.IsStrobe(__0))
                 FpanoStrobe.Attach(__result);
+            else if (FpanoLamp.IsLamp(__0))
+                FpanoLamp.Attach(__result, __0);
             int kind = Kind(__0);
             if (kind == 1)
                 FitRails(__result.transform, __0);
@@ -672,10 +676,12 @@ internal static class FpanoRailink
                 else
                 {
                     // the lights' and adapters' slots: the group's fit scale taken off, so what hangs there keeps its size
+                    // (the prefab's own scale kept: the right-hand slots are the left ones mirrored, x = -1)
                     if (System.Array.IndexOf(RealSize, t.name) >= 0)
                     {
-                        Vector3 g = group.localScale;
-                        t.localScale = new Vector3(1f / Mathf.Max(g.x, 1e-6f), 1f / Mathf.Max(g.y, 1e-6f), 1f / Mathf.Max(g.z, 1e-6f));
+                        Remember(t);
+                        Vector3 own = _prefab[t.GetInstanceID()].S, g = group.localScale;
+                        t.localScale = new Vector3(own.x / Mathf.Max(g.x, 1e-6f), own.y / Mathf.Max(g.y, 1e-6f), own.z / Mathf.Max(g.z, 1e-6f));
                     }
                     continue;
                 }

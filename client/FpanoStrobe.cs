@@ -3,38 +3,128 @@ using UnityEngine;
 
 namespace EnvgFusion;
 
+// A glow at a lens (shader Justachae/FPANO/StrobeGlow), drawn with Graphics.DrawMesh on the frames it is to show and
+// on no other: no renderer of ours sits in the player's model, where the game (or another mod) switching the model's
+// renderers on would leave it lit. The material and quad are made once; each light keeps its own property block.
+internal static class FpanoGlow
+{
+    internal struct Look { public bool Ir; public Color Colour; public float Size; public Vector4 Shape; public float Forward; }
+
+    private static Material? _material;
+    private static Mesh? _quad;
+    private static bool _tried;
+    private static readonly int ColorId = Shader.PropertyToID("_Color"), SizeId = Shader.PropertyToID("_Size"), ShapeId = Shader.PropertyToID("_Shape"), DirId = Shader.PropertyToID("_Dir");
+
+    internal static bool Ready()
+    {
+        if (_material != null)
+            return true;
+        if (_tried)
+            return false;
+        _tried = true;
+        Shader? shader = EnvgFusion.BundleShader("Justachae/FPANO/StrobeGlow");
+        if (shader == null || !shader.isSupported)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: the lens glow shader is missing or unsupported: the lights shine without a glow");
+            return false;
+        }
+        _material = new Material(shader) { name = "Justachae F-PANO lens glow", hideFlags = HideFlags.DontSave };
+        _quad = new Mesh
+        {
+            name = "Justachae F-PANO lens glow quad",
+            vertices = new[] { new Vector3(-1f, -1f, 0f), new Vector3(-1f, 1f, 0f), new Vector3(1f, 1f, 0f), new Vector3(1f, -1f, 0f) },
+            triangles = new[] { 0, 1, 2, 0, 2, 3 },
+            // (wide bounds: the quad is laid out toward the camera in the shader, its size grows with the distance)
+            bounds = new Bounds(Vector3.zero, Vector3.one * 4f),
+        };
+        _quad.UploadMeshData(true);
+        return true;
+    }
+
+    internal static void Set(MaterialPropertyBlock block, Look look)
+    {
+        block.SetColor(ColorId, look.Colour);
+        block.SetFloat(SizeId, look.Size);
+        block.SetVector(ShapeId, look.Shape);
+        block.SetVector(DirId, new Vector4(look.Forward, 0f, 0f, 0f));
+    }
+
+    internal static void Draw(Transform lens, MaterialPropertyBlock block)
+    {
+        if (_material != null && _quad != null)
+            Graphics.DrawMesh(_quad, lens.localToWorldMatrix, _material, lens.gameObject.layer, null, 0, block, false, false, false);
+    }
+
+    // the game's night vision on (as IkLight shows the IR lights)
+    internal static bool NightVisionOn()
+    {
+        try
+        {
+            CameraManager? manager = CameraManager.Instance;
+            return manager != null && manager.NightVision != null && manager.NightVision.On;
+        }
+        catch (System.Exception)
+        {
+            return false;
+        }
+    }
+
+    internal static Transform? FindDeep(Transform root, string name)
+    {
+        if (root.name == name)
+            return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform? found = FindDeep(root.GetChild(i), name);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
+    // the light's modes (mode_001 ... mode_00N), found once
+    internal static GameObject?[] Modes(Transform root, int count)
+    {
+        var modes = new GameObject?[count];
+        for (int m = 0; m < count; m++)
+            modes[m] = FindDeep(root, "mode_00" + (m + 1))?.gameObject;
+        return modes;
+    }
+
+    internal static int ActiveMode(GameObject?[] modes)
+    {
+        for (int m = 0; m < modes.Length; m++)
+            if (modes[m] != null && modes[m]!.activeInHierarchy)
+                return m;
+        return -1;
+    }
+}
+
 // The CORE Survival HEL-STAR rail strobe on the RAILINK flashes as in the user's videos: every strobe together, from
-// one clock, 100 ms on in each 1.03 s (at least one frame a flash, however slow the frame). During the flash the mode's
-// own light is on (it lights the wall and the helmet) and a glow is drawn at the lens ("strobe_lens"): the white dome in
-// the visible modes; in the IR modes the night-vision bloom with long star spikes, only while night vision is on (as the
-// game's IkLight shows the IR light). Dim modes give a smaller, weaker flash. Lights, modes and the lens are found once,
-// when the strobe's model is made; nothing is searched or allocated per frame.
+// one clock, 100 ms on in each 1.03 s (at least one frame a flash, however slow the frame). During the flash, and only
+// then, the mode's own light is on and a glow is drawn at the lens ("strobe_lens"): the clear dome lit white in the
+// visible modes; in the IR modes the night-vision bloom with long star spikes, only while night vision is on. Dim modes
+// give a smaller, weaker flash. Found once, when the strobe's model is made; nothing searched or allocated per frame.
 internal sealed class FpanoStrobe : MonoBehaviour
 {
     private const float Period = 1.03f, Flash = 0.10f;
     private const string StrobeA = "6a4f9a400000000000000061", StrobeB = "6a4f9a400000000000000062";
 
-    // per mode (mode_001 IR dim, mode_002 IR bright, mode_003 visible dim, mode_004 visible bright): the glow
-    private struct Look { public bool Ir; public Color Colour; public float Size; public Vector4 Shape; }
-    private static readonly Look[] Looks =
+    // mode_001 IR dim, mode_002 IR bright, mode_003 visible dim, mode_004 visible bright
+    private static readonly FpanoGlow.Look[] Looks =
     {
-        new Look { Ir = true, Colour = new Color(1f, 1f, 1f) * 5f, Size = 0.15f, Shape = new Vector4(0.10f, 0.40f, 0.8f, 0.010f) },
-        new Look { Ir = true, Colour = new Color(1f, 1f, 1f) * 14f, Size = 0.30f, Shape = new Vector4(0.10f, 0.45f, 1.2f, 0.010f) },
-        new Look { Ir = false, Colour = new Color(1f, 1f, 1f) * 4f, Size = 0.02f, Shape = new Vector4(0.35f, 0.70f, 0f, 0f) },
-        new Look { Ir = false, Colour = new Color(1f, 1f, 1f) * 10f, Size = 0.03f, Shape = new Vector4(0.35f, 0.70f, 0f, 0f) },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 5f, Size = 0.15f, Shape = new Vector4(0.10f, 0.40f, 0.8f, 0.010f) },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 14f, Size = 0.30f, Shape = new Vector4(0.10f, 0.45f, 1.2f, 0.010f) },
+        // the dome: about its own size, a hot core, hardly a halo
+        new FpanoGlow.Look { Ir = false, Colour = Color.white * 1.2f, Size = 0.012f, Shape = new Vector4(0.55f, 0.75f, 0f, 0f) },
+        new FpanoGlow.Look { Ir = false, Colour = Color.white * 2.5f, Size = 0.015f, Shape = new Vector4(0.55f, 0.75f, 0f, 0f) },
     };
-
-    private static Shader? _shader;
-    private static Material? _material;
-    private static Mesh? _quad;
-    private static bool _shaderTried;
-    private static readonly int ColorId = Shader.PropertyToID("_Color"), SizeId = Shader.PropertyToID("_Size"), ShapeId = Shader.PropertyToID("_Shape");
 
     private Light[] _lights = new Light[0];
     private GameObject?[] _modes = new GameObject?[0];
-    private MeshRenderer? _glow;
+    private Transform? _lens;
     private MaterialPropertyBlock? _block;
-    private int _shownMode = -1;
+    private int _blockMode = -1;
     private int _lastCycle = -1;
 
     internal static bool IsStrobe(EFT.InventoryLogic.Item? item)
@@ -54,76 +144,11 @@ internal sealed class FpanoStrobe : MonoBehaviour
             if (light.gameObject.name == "strobe_light")
                 found.Add(light);
         strobe._lights = found.ToArray();
-        strobe._modes = new GameObject?[Looks.Length];
-        for (int m = 0; m < Looks.Length; m++)
-            strobe._modes[m] = FindDeep(model.transform, "mode_00" + (m + 1))?.gameObject;
-        Transform? lens = FindDeep(model.transform, "strobe_lens");
-        if (lens != null && Glow() != null)
-        {
-            var glow = new GameObject("strobe_glow");
-            glow.transform.SetParent(lens, false);
-            glow.AddComponent<MeshFilter>().sharedMesh = _quad;
-            strobe._glow = glow.AddComponent<MeshRenderer>();
-            strobe._glow.sharedMaterial = _material;
-            strobe._glow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            strobe._glow.receiveShadows = false;
-            strobe._glow.enabled = false;
+        strobe._modes = FpanoGlow.Modes(model.transform, Looks.Length);
+        strobe._lens = FpanoGlow.FindDeep(model.transform, "strobe_lens");
+        if (strobe._lens != null && FpanoGlow.Ready())
             strobe._block = new MaterialPropertyBlock();
-        }
-        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: strobe " + model.name + ": " + strobe._lights.Length + " light(s), " + (strobe._glow != null ? "a lens glow" : "no lens glow (no strobe_lens or no shader)"));
-    }
-
-    private static Transform? FindDeep(Transform root, string name)
-    {
-        if (root.name == name)
-            return root;
-        for (int i = 0; i < root.childCount; i++)
-        {
-            Transform? found = FindDeep(root.GetChild(i), name);
-            if (found != null)
-                return found;
-        }
-        return null;
-    }
-
-    // the glow's material and quad, made once
-    private static Material? Glow()
-    {
-        if (_material != null)
-            return _material;
-        if (_shaderTried)
-            return null;
-        _shaderTried = true;
-        _shader = EnvgFusion.BundleShader("Justachae/FPANO/StrobeGlow");
-        if (_shader == null || !_shader.isSupported)
-        {
-            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: the strobe glow shader is missing or unsupported: the strobes flash their lights only");
-            return null;
-        }
-        _material = new Material(_shader) { name = "Justachae F-PANO strobe glow", hideFlags = HideFlags.DontSave };
-        _quad = new Mesh
-        {
-            name = "Justachae F-PANO strobe glow quad",
-            vertices = new[] { new Vector3(-1f, -1f, 0f), new Vector3(-1f, 1f, 0f), new Vector3(1f, 1f, 0f), new Vector3(1f, -1f, 0f) },
-            triangles = new[] { 0, 1, 2, 0, 2, 3 },
-            // (its bounds wide: the quad is laid out toward the camera in the shader)
-            bounds = new Bounds(Vector3.zero, Vector3.one * 2f),
-        };
-        _quad.UploadMeshData(true);
-        return _material;
-    }
-
-    private static bool NightVisionOn()
-    {
-        try
-        {
-            CameraManager? manager = CameraManager.Instance;
-            return manager != null && manager.NightVision != null && manager.NightVision.On;
-        }
-        catch (System.Exception)
-        {
-            return false;
-        }
+        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: strobe " + model.name + ": " + strobe._lights.Length + " light(s), " + (strobe._block != null ? "a lens glow" : "no lens glow (no strobe_lens or no shader)"));
     }
 
     private void Update()
@@ -138,26 +163,80 @@ internal sealed class FpanoStrobe : MonoBehaviour
             if (light != null && light.enabled != on)
                 light.enabled = on;
         }
-        if (_glow == null)
+        if (!on || _block == null || _lens == null)
             return;
-        int mode = -1;
-        for (int m = 0; m < _modes.Length; m++)
-            if (_modes[m] != null && _modes[m]!.activeInHierarchy)
-            {
-                mode = m;
-                break;
-            }
-        bool show = on && mode >= 0 && (!Looks[mode].Ir || NightVisionOn());
-        if (show && mode != _shownMode)
+        int mode = FpanoGlow.ActiveMode(_modes);
+        if (mode < 0 || Looks[mode].Ir && !FpanoGlow.NightVisionOn())
+            return;
+        if (mode != _blockMode)
         {
-            _shownMode = mode;
-            Look look = Looks[mode];
-            _block!.SetColor(ColorId, look.Colour);
-            _block.SetFloat(SizeId, look.Size);
-            _block.SetVector(ShapeId, look.Shape);
-            _glow.SetPropertyBlock(_block);
+            _blockMode = mode;
+            FpanoGlow.Set(_block, Looks[mode]);
         }
-        if (_glow.enabled != show)
-            _glow.enabled = show;
+        FpanoGlow.Draw(_lens, _block);
+    }
+}
+
+// The SureFire HL2-A and Princeton Tec MPLS on the RAILINK look lit while a mode is on: a steady glow at the lamp's
+// face ("lamp_lens", +z the beam), about the lens's size, in the mode's colour, brightest looking into the beam. The
+// IR modes only through night vision, and faint, as a real IR lamp seen through a tube.
+internal sealed class FpanoLamp : MonoBehaviour
+{
+    private const string HlA = "6a4f9a400000000000000041", HlB = "6a4f9a400000000000000042", MpA = "6a4f9a400000000000000051", MpB = "6a4f9a400000000000000052";
+
+    // HL2-A: mode_001 IR low, 002 IR high, 003 white low, 004 white high
+    private static readonly FpanoGlow.Look[] Hl2a =
+    {
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.6f, Size = 0.018f, Shape = new Vector4(0.45f, 0.8f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 1.5f, Size = 0.022f, Shape = new Vector4(0.45f, 0.8f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 1.0f, Size = 0.020f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 2.0f, Size = 0.025f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 2f },
+    };
+    // MPLS: mode_001 red, 002 white
+    private static readonly FpanoGlow.Look[] Mpls =
+    {
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.06f, 0.03f) * 1.5f, Size = 0.010f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 1.5f },
+        new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.92f) * 1.2f, Size = 0.010f, Shape = new Vector4(0.5f, 0.8f, 0f, 0f), Forward = 1.5f },
+    };
+
+    private FpanoGlow.Look[] _looks = Hl2a;
+    private GameObject?[] _modes = new GameObject?[0];
+    private Transform? _lens;
+    private MaterialPropertyBlock? _block;
+    private int _blockMode = -1;
+
+    internal static bool IsLamp(EFT.InventoryLogic.Item? item)
+    {
+        string id = item != null ? item.TemplateId.ToString() : "";
+        return id == HlA || id == HlB || id == MpA || id == MpB;
+    }
+
+    internal static void Attach(GameObject model, EFT.InventoryLogic.Item item)
+    {
+        if (model == null || model.GetComponent<FpanoLamp>() != null)
+            return;
+        string id = item.TemplateId.ToString();
+        var lamp = model.AddComponent<FpanoLamp>();
+        lamp._looks = id == MpA || id == MpB ? Mpls : Hl2a;
+        lamp._modes = FpanoGlow.Modes(model.transform, lamp._looks.Length);
+        lamp._lens = FpanoGlow.FindDeep(model.transform, "lamp_lens");
+        if (lamp._lens != null && FpanoGlow.Ready())
+            lamp._block = new MaterialPropertyBlock();
+        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: lamp " + model.name + ": " + (lamp._block != null ? "a lamp-face glow" : "no lamp-face glow (no lamp_lens or no shader)"));
+    }
+
+    private void Update()
+    {
+        if (_block == null || _lens == null)
+            return;
+        int mode = FpanoGlow.ActiveMode(_modes);
+        if (mode < 0 || _looks[mode].Ir && !FpanoGlow.NightVisionOn())
+            return;
+        if (mode != _blockMode)
+        {
+            _blockMode = mode;
+            FpanoGlow.Set(_block, _looks[mode]);
+        }
+        FpanoGlow.Draw(_lens, _block);
     }
 }
