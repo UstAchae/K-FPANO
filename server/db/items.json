@@ -1,44 +1,196 @@
 {
  "gpnvg": "5c0558060db834001b735271",
- "railHeadsets": ["5a16b9fffcdbcb0176308b34", "66b5f69ea7f72d197e70bcdb", "66b5f6a28ca68c6461709ed8"],
- "railAdapters": ["5a398ab9c4a282000c5a9842", "5a398b75c4a282000a51a266"],
+ "railHeadsets": [
+  "5a16b9fffcdbcb0176308b34",
+  "66b5f69ea7f72d197e70bcdb",
+  "66b5f6a28ca68c6461709ed8"
+ ],
+ "railAdapters": [
+  "5a398ab9c4a282000c5a9842",
+  "5a398b75c4a282000a51a266"
+ ],
  "newHelmetSlot": "mod_equipment_railink",
  "slotLocales": {
-  "MOD_EQUIPMENT_RAILINK": {"en": "RAILS", "ch": "导轨"},
-  "MOD_BATTERY": {"en": "BATTERY", "ch": "电池"}
+  "MOD_EQUIPMENT_RAILINK": {
+   "en": "RAILS",
+   "ch": "导轨"
+  },
+  "MOD_BATTERY": {
+   "en": "BATTERY",
+   "ch": "电池"
+  }
  },
  "trader": "5935c25fb3acc3127c3d8cd9",
  "currency": "5696686a4bdc2da3298b456a",
  "kinds": {
-  "rails": {"clone": "5a398b75c4a282000a51a266", "handbook": "5b5f755f86f77447ec5d770e", "price": 65000, "usd": 650, "loyalty": 3,
-            "weight": 0.35, "width": 2, "height": 1,
-            "locales": {"en": ["Ops-Core RAILINK powered rails", "RAILINK", "Ops-Core ARC rails that carry power and data around the helmet from a battery pack on its back. They take the place of the helmet's own rails and headset mount: a helmet headset, the battery pack, two ARC rail adapters and the F-PANO goggle mount fit on them. With the rails on, the helmet takes no other night vision device."],
-                        "ch": ["Ops-Core RAILINK 供电导轨", "RAILINK", "Ops-Core ARC 导轨，由头盔后部的电池盒沿导轨向前供电、传输数据。它取代头盔自带的导轨和耳机座：上面可以装头盔耳机、电池盒、两个 ARC 导轨转接座和 F-PANO 夜视仪支架。装上导轨后，头盔不能再装其他夜视仪。"]}},
-  "battery": {"clone": "5a398ab9c4a282000c5a9842", "handbook": "5b5f755f86f77447ec5d770e", "price": 18000, "usd": 180, "loyalty": 2,
-              "weight": 0.25, "width": 1, "height": 1,
-              "locales": {"en": ["Ops-Core RAILINK Battery Pack+", "BP+", "The RAILINK system's battery pack, six AA lithium cells, worn on the back of the helmet. It powers everything on the rails; the F-PANO gives no picture without it."],
-                          "ch": ["Ops-Core RAILINK Battery Pack+ 电池盒", "BP+", "RAILINK 系统的电池盒，装 6 节 AA 锂电池，挂在头盔后部，为导轨上的所有设备供电。没有它，F-PANO 放下也没有画面。"]}},
-  "mount": {"clone": "5a16b8a9fcdbcb00165aa6ca", "handbook": "5b5f755f86f77447ec5d770e", "price": 30000, "usd": 300, "loyalty": 3,
-            "weight": 0.2, "width": 1, "height": 1,
-            "locales": {"en": ["F-PANO helmet mount", "F-PANO mnt", "The mount that holds the F-PANO goggle on a RAILINK helmet: height, tilt and fore-aft adjustment, and a flip-up hinge. It fits only the RAILINK rails' mount."],
-                        "ch": ["F-PANO 头盔支架", "F-PANO 支架", "把 F-PANO 夜视仪固定在装有 RAILINK 导轨的头盔上的支架，可调高低、俯仰、前后，可以向上翻起。只能装在 RAILINK 导轨的支架位上。"]}},
-  "goggle": {"clone": "5c0558060db834001b735271", "handbook": "5b5f749986f774094242f199", "price": 260000, "usd": 2600, "loyalty": 4,
-             "locales": {"en": ["L3Harris F-PANO fused panoramic night vision goggles", "F-PANO", "Fused Panoramic Night Vision Goggle: the four-tube, 97 degree panoramic goggle with a thermal channel added. Four white phosphor image intensifier tubes; a small thermal camera above the right inner tube lays its picture over that tube's image. Mounts on the F-PANO mount and is powered through RAILINK rails."],
-                         "ch": ["L3Harris F-PANO 融合全景夜视仪", "F-PANO", "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。装在 F-PANO 支架上，由 RAILINK 导轨供电。"]}}
+  "rails": {
+   "clone": "5a398b75c4a282000a51a266",
+   "handbook": "5b5f755f86f77447ec5d770e",
+   "price": 65000,
+   "usd": 650,
+   "loyalty": 3,
+   "weight": 0.35,
+   "width": 2,
+   "height": 1,
+   "locales": {
+    "en": [
+     "Ops-Core RAILINK powered rails",
+     "RAILINK",
+     "Ops-Core ARC rails that carry power and data around the helmet from a battery pack on its back. They take the place of the helmet's own rails and headset mount: a helmet headset, the battery pack, two ARC rail adapters and the F-PANO goggle mount fit on them. With the rails on, the helmet takes no other night vision device."
+    ],
+    "ch": [
+     "Ops-Core RAILINK 供电导轨",
+     "RAILINK",
+     "Ops-Core ARC 导轨，由头盔后部的电池盒沿导轨向前供电、传输数据。它取代头盔自带的导轨和耳机座：上面可以装头盔耳机、电池盒、两个 ARC 导轨转接座和 F-PANO 夜视仪支架。装上导轨后，头盔不能再装其他夜视仪。"
+    ]
+   }
+  },
+  "battery": {
+   "clone": "5a398ab9c4a282000c5a9842",
+   "handbook": "5b5f755f86f77447ec5d770e",
+   "price": 18000,
+   "usd": 180,
+   "loyalty": 2,
+   "weight": 0.25,
+   "width": 1,
+   "height": 1,
+   "locales": {
+    "en": [
+     "Ops-Core RAILINK Battery Pack+",
+     "BP+",
+     "The RAILINK system's battery pack, six AA lithium cells, worn on the back of the helmet. It powers everything on the rails; the F-PANO gives no picture without it."
+    ],
+    "ch": [
+     "Ops-Core RAILINK Battery Pack+ 电池盒",
+     "BP+",
+     "RAILINK 系统的电池盒，装 6 节 AA 锂电池，挂在头盔后部，为导轨上的所有设备供电。没有它，F-PANO 放下也没有画面。"
+    ]
+   }
+  },
+  "mount": {
+   "clone": "5a16b8a9fcdbcb00165aa6ca",
+   "handbook": "5b5f755f86f77447ec5d770e",
+   "price": 30000,
+   "usd": 300,
+   "loyalty": 3,
+   "weight": 0.2,
+   "width": 1,
+   "height": 1,
+   "locales": {
+    "en": [
+     "F-PANO helmet mount",
+     "F-PANO mnt",
+     "The mount that holds the F-PANO goggle on a RAILINK helmet: height, tilt and fore-aft adjustment, and a flip-up hinge. It fits only the RAILINK rails' mount."
+    ],
+    "ch": [
+     "F-PANO 头盔支架",
+     "F-PANO 支架",
+     "把 F-PANO 夜视仪固定在装有 RAILINK 导轨的头盔上的支架，可调高低、俯仰、前后，可以向上翻起。只能装在 RAILINK 导轨的支架位上。"
+    ]
+   }
+  },
+  "goggle": {
+   "clone": "5c0558060db834001b735271",
+   "handbook": "5b5f749986f774094242f199",
+   "price": 260000,
+   "usd": 2600,
+   "loyalty": 4,
+   "locales": {
+    "en": [
+     "L3Harris F-PANO fused panoramic night vision goggles",
+     "F-PANO",
+     "Fused Panoramic Night Vision Goggle: the four-tube, 97 degree panoramic goggle with a thermal channel added. Four white phosphor image intensifier tubes; a small thermal camera above the right inner tube lays its picture over that tube's image. Mounts on the F-PANO mount and is powered through RAILINK rails."
+    ],
+    "ch": [
+     "L3Harris F-PANO 融合全景夜视仪",
+     "F-PANO",
+     "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。装在 F-PANO 支架上，由 RAILINK 导轨供电。"
+    ]
+   }
+  }
  },
  "colours": {
-  "fde": {"en": "FDE", "ch": "沙色"},
-  "blk": {"en": "Black", "ch": "黑色"}
+  "fde": {
+   "en": "FDE",
+   "ch": "沙色"
+  },
+  "blk": {
+   "en": "Black",
+   "ch": "黑色"
+  }
  },
  "items": [
-  {"kind": "rails", "colour": "fde", "id": "6a4f9a400000000000000011", "assort": "6a4f9a400000000000000111", "bundle": "ustachae_fpano/rails_fde.bundle"},
-  {"kind": "rails", "colour": "blk", "id": "6a4f9a400000000000000012", "assort": "6a4f9a400000000000000112", "bundle": "ustachae_fpano/rails_blk.bundle"},
-  {"kind": "battery", "colour": "fde", "id": "6a4f9a400000000000000021", "assort": "6a4f9a400000000000000121", "bundle": "ustachae_fpano/battery_fde.bundle"},
-  {"kind": "battery", "colour": "blk", "id": "6a4f9a400000000000000022", "assort": "6a4f9a400000000000000122", "bundle": "ustachae_fpano/battery_blk.bundle"},
-  {"kind": "mount", "colour": "fde", "id": "6a4f9a400000000000000031", "assort": "6a4f9a400000000000000131", "bundle": "ustachae_fpano/mount_fde.bundle"},
-  {"kind": "mount", "colour": "blk", "id": "6a4f9a400000000000000032", "assort": "6a4f9a400000000000000132", "bundle": "ustachae_fpano/mount_blk.bundle"},
-  {"kind": "goggle", "colour": "fde", "id": "6a4f9a400000000000000001", "assort": "6a4f9a400000000000000101", "bundle": "ustachae_fpano/goggle_fde.bundle"},
-  {"kind": "goggle", "colour": "blk", "id": "6a4f9a400000000000000002", "assort": "6a4f9a400000000000000102", "bundle": "ustachae_fpano/goggle_blk.bundle"}
+  {
+   "kind": "rails",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000011",
+   "assort": "6a4f9a400000000000000111",
+   "bundle": "ustachae_fpano/rails_fde.bundle"
+  },
+  {
+   "kind": "rails",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000012",
+   "assort": "6a4f9a400000000000000112",
+   "bundle": "ustachae_fpano/rails_blk.bundle"
+  },
+  {
+   "kind": "battery",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000021",
+   "assort": "6a4f9a400000000000000121",
+   "bundle": "ustachae_fpano/battery_fde.bundle"
+  },
+  {
+   "kind": "battery",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000022",
+   "assort": "6a4f9a400000000000000122",
+   "bundle": "ustachae_fpano/battery_blk.bundle"
+  },
+  {
+   "kind": "mount",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000031",
+   "assort": "6a4f9a400000000000000131",
+   "bundle": "ustachae_fpano/mount_fde.bundle"
+  },
+  {
+   "kind": "mount",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000032",
+   "assort": "6a4f9a400000000000000132",
+   "bundle": "ustachae_fpano/mount_blk.bundle"
+  },
+  {
+   "kind": "goggle",
+   "colour": "fde",
+   "id": "6a4f9a400000000000000001",
+   "assort": "6a4f9a400000000000000101",
+   "bundle": "ustachae_fpano/goggle_fde.bundle"
+  },
+  {
+   "kind": "goggle",
+   "colour": "blk",
+   "id": "6a4f9a400000000000000002",
+   "assort": "6a4f9a400000000000000102",
+   "bundle": "ustachae_fpano/goggle_blk.bundle"
+  }
  ],
- "slotIds": "6a4f9a4000000000000002"
+ "slotIds": "6a4f9a4000000000000002",
+ "railHelmets": [
+  "5a154d5cfcdbcb001a3b00da",
+  "5ac8d6885acfc400180ae7b0",
+  "5c17a7ed2e2216152142459c",
+  "5d5e7d28a4b936645d161203",
+  "5d5e9c74a4b9364855191c40",
+  "5e00c1ad86f774747333222c",
+  "5e01ef6886f77445f643baa4",
+  "5e4bfc1586f774264f7582d3",
+  "5ea05cf85ad9772e6624305d",
+  "5f60b34a41e30a4ab12a6947",
+  "65719f0775149d62ce0a670b",
+  "68a9b3ca0a9c4f9398032c46",
+  "68a9b5a5863d2a71fa0494a6"
+ ]
 }

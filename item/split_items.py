@@ -106,11 +106,19 @@ def split(out, info):
         m = m.copy(); s = np.cbrt(np.linalg.det(m[:3, :3])); m[:3, :3] /= s; return m
     Lgi, fit = group_inv(FAST_TPL)
     fast = helmet_slots(FAST); mnt = fast['mod_mount']
+    # Headsets: placed as on their own helmet RELATIVE TO THE HEAD (the helmet's root), so the cups sit on the ears and
+    # the arms' clips meet the rails (checked on the EXFIL, Tor-2, FAST and MICH 2001); railink_headsets.json gives,
+    # per headset template, the local pose of its slot node under the HELMET's root; the client sets the rails'
+    # mod_equipment node there in world.
     heads = {}
     for ids, tpl, path, slot in HEADSETS:
-        gi, _ = group_inv(tpl); m = unscaled(gi @ helmet_slots(path)[slot])
-        for i in ids: heads[i] = node('mod_equipment', 'fpano_railink', m)
-    (ITEM / 'railink_headsets.json').write_text(json.dumps({i: {'pos': n['pos'], 'rot': n['rot']} for i, n in heads.items()}, indent=1))
+        env = UnityPy.load(str(WIN / path))
+        t = next(o.read() for o in env.objects if o.type.name == 'Transform' and o.read().m_GameObject.read().m_Name == slot)
+        q = t.m_LocalRotation; p = t.m_LocalPosition
+        for i in ids: heads[i] = {'pos': [p.x, p.y, p.z], 'rot': [q.x, q.y, q.z, q.w], 'frame': 'helmet root'}
+    (ITEM / 'railink_headsets.json').write_text(json.dumps(heads, indent=1))
+    rac = helmet_slots(FAST)['mod_equipment_001']
+    heads['5a16b9fffcdbcb0176308b34'] = node('mod_equipment', 'fpano_railink', unscaled(Lgi @ rac))
     rails.append(dict(heads['5a16b9fffcdbcb0176308b34']))     # the RAC's place by default
     left = unscaled(Lgi @ mnt); left[:3, 3] -= np.array(fit['left'])   # on the left bone at the FAST's fit
     rz = np.diag([-1.0, -1.0, 1.0, 1.0])                         # the right side: turned 180 deg about the forward axis

@@ -16,6 +16,7 @@ from fit_profile import helmet_tris
 from fit_manual import local
 
 CELL, CONTACT, QS = 0.002, 0.0005, 0.25
+HIDE = json.loads((ITEM / 'railink_hide.json').read_text()) if (ITEM / 'railink_hide.json').exists() else {}
 
 
 def heightmap(T):
@@ -52,7 +53,12 @@ def main():
     shapes = {}
     for tpl, path in sorted(helmets().items()): shapes.setdefault(path.split('/')[-2], path)
     for key, path in shapes.items():
-        T, _ = helmet_tris(path); H = heightmap(T)
+        T, _ = helmet_tris(path)
+        if key in HIDE:                                            # the shell without the own rails the RAILINK replaces
+            from rail_islands import renderers
+            T = np.vstack([np.delete(t, [i for e in HIDE[key] if e['renderer'] == go for i in e['drop']], axis=0)
+                           for go, _, t, _ in renderers(path)])
+        H = heightmap(T)
         p = {'ty': 0.0, 'tz': 0.0, 'pitch': 0.0, 's': 1.0, **manual.get(key, {})}; p['sx'] = 1.0
         L = local(p, centre); X = V @ L[:3, :3].T + L[:3, 3]
         out = {}
@@ -61,7 +67,13 @@ def main():
             sh = np.array([H.get((int(np.floor(x[1] / CELL)), int(np.floor(x[2] / CELL)), sg), np.nan) for x in Xs]); ok = ~np.isnan(sh)
             if ok.sum() < 30: out[side] = 0.0; continue
             gap = np.abs(Xs[ok, 0]) - sh[ok]
-            out[side] = float(np.clip(CONTACT - np.quantile(gap, QS), -0.02, 0.04)) / p['s']
+            # outward until at most 3% of the inner faces lie inside the shell (a binary search on the move)
+            lo, hi = -0.02, 0.05
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                if float((gap + mid < -CONTACT).mean()) > 0.03: lo = mid
+                else: hi = mid
+            out[side] = hi / p['s']
         # the back (battery and crossbar): moved along the group's Z (+ toward the helmet) so that 2% of its vertices
         # lie inside the shell's back (behind it in Z is outside); a binary search on that share.
         HB = backmap(T); back = BV @ L[:3, :3].T + L[:3, 3]

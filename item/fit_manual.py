@@ -57,9 +57,15 @@ def main(argv):
     keys = [k for k in shapes if not only or k in only]
     for key in keys:
         tpl, path, L = shapes[key]
-        P, N, slot = prefab(path)
-        H = slot @ Rx90; Hi = np.linalg.inv(H)
-        shell = np.vstack(TRIS).reshape(-1, 3) @ Hi[:3, :3].T + Hi[:3, 3]  # the helmet in the F-PANO root frame
+        HIDE = json.loads((ITEM / 'railink_hide.json').read_text()) if (ITEM / 'railink_hide.json').exists() else {}
+        if key in HIDE:                                            # drawn without its own rails, as the client shows it
+            from rail_islands import renderers
+            shell = np.vstack([np.delete(t, [i for e in HIDE[key] if e['renderer'] == go for i in e['drop']], axis=0)
+                               for go, _, t, _ in renderers(path)]).reshape(-1, 3)
+        else:
+            P, N, slot = prefab(path)
+            H = slot @ Rx90; Hi = np.linalg.inv(H)
+            shell = np.vstack(TRIS).reshape(-1, 3) @ Hi[:3, :3].T + Hi[:3, 3]  # the helmet in the F-PANO root frame
         Y = RP.copy(); t = np.clip((np.abs(Y[:, 0]) - 0.045) / 0.03, 0, 1); t = t * t * (3 - 2 * t)   # the rails' side skinning
         Y[:, 0] += t * np.where(Y[:, 0] < 0, -p_of[key]['dxL'], p_of[key]['dxR']) * (RAILMASK)
         Y[:, 2] += np.where(RAILMASK > 0, 1 - t, 1.0) * p_of[key]['dzBack']                       # the back bone

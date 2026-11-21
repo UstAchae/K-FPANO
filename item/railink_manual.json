@@ -7,8 +7,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.8,
-  "dxL": 0.0107,
-  "dxR": 0.0083,
+  "dxL": 0.0137,
+  "dxR": 0.0106,
   "dzBack": 0.0025
  },
  "helmet_crye_airframe": {
@@ -19,8 +19,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.728,
-  "dxL": 0.0245,
-  "dxR": 0.0238,
+  "dxL": 0.0206,
+  "dxR": 0.0208,
   "dzBack": -0.019
  },
  "helmet_mich2001": {
@@ -31,8 +31,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.698,
-  "dxL": 0.0214,
-  "dxR": 0.0179,
+  "dxL": 0.0254,
+  "dxR": 0.0228,
   "dzBack": -0.0086
  },
  "helmet_mich2002": {
@@ -43,8 +43,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.713,
-  "dxL": 0.0171,
-  "dxR": 0.0166,
+  "dxL": 0.0188,
+  "dxR": 0.0144,
   "dzBack": -0.0059
  },
  "helmet_team_wendy_exfil": {
@@ -55,8 +55,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.667,
-  "dxL": 0.0374,
-  "dxR": 0.032,
+  "dxL": 0.0415,
+  "dxR": 0.0362,
   "dzBack": -0.0293
  },
  "helmet_tc800": {
@@ -67,8 +67,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.683,
-  "dxL": 0.0086,
-  "dxR": 0.0091,
+  "dxL": 0.0092,
+  "dxR": 0.0081,
   "dzBack": -0.0019
  },
  "helmet_hops_core_fast": {
@@ -79,8 +79,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.8,
-  "dxL": 0.0106,
-  "dxR": 0.0083,
+  "dxL": 0.0137,
+  "dxR": 0.0111,
   "dzBack": 0.0025
  },
  "helmet_galvion_caiman": {
@@ -91,8 +91,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.673,
-  "dxL": 0.0231,
-  "dxR": 0.0211,
+  "dxL": 0.0295,
+  "dxR": 0.0277,
   "dzBack": 0.0056
  },
  "helmet_tor_2": {
@@ -103,8 +103,8 @@
   "sx": 1.0,
   "auto": "profile",
   "iou": 0.797,
-  "dxL": 0.0362,
-  "dxR": 0.0364,
+  "dxL": 0.0399,
+  "dxR": 0.0397,
   "dzBack": -0.029
  },
  "helmet_bastion": {
@@ -115,8 +115,8 @@
   "sx": 1.0,
   "auto": "eye rail",
   "iou": 0.621,
-  "dxL": 0.0331,
-  "dxR": 0.0222,
+  "dxL": 0.0391,
+  "dxR": 0.0306,
   "dzBack": -0.0212
  },
  "helmet_neosteel": {
@@ -127,8 +127,8 @@
   "sx": 1.0,
   "auto": "eye rail",
   "iou": 0.457,
-  "dxL": 0.0242,
-  "dxR": 0.0199,
+  "dxL": 0.0331,
+  "dxR": 0.0293,
   "dzBack": -0.0223
  },
  "helmet_flux": {
@@ -139,8 +139,8 @@
   "sx": 1.0,
   "auto": "eye rail",
   "iou": 0.532,
-  "dxL": 0.0309,
-  "dxR": 0.0266,
+  "dxL": 0.0416,
+  "dxR": 0.0354,
   "dzBack": -0.0178
  },
  "helmet_strike_ballistic": {
@@ -151,8 +151,8 @@
   "sx": 1.0,
   "auto": "eye rail",
   "iou": 0.333,
-  "dxL": 0.0289,
-  "dxR": 0.0218,
+  "dxL": 0.0381,
+  "dxR": 0.0291,
   "dzBack": -0.0009
  },
  "helmet_ulach": {
@@ -163,8 +163,8 @@
   "sx": 1.0,
   "auto": "eye band",
   "iou": 0.285,
-  "dxL": 0.033,
-  "dxR": 0.0312,
+  "dxL": 0.0449,
+  "dxR": 0.0387,
   "dzBack": -0.0312
  },
  "helmet_lshz": {
@@ -175,8 +175,8 @@
   "sx": 1.0,
   "auto": "eye rail",
   "iou": 0.722,
-  "dxL": 0.0362,
-  "dxR": 0.0313,
+  "dxL": 0.0413,
+  "dxR": 0.0382,
   "dzBack": -0.0215
  },
  "helmet_nfm_hjelm": {
@@ -187,8 +187,8 @@
   "sx": 1.0,
   "auto": "eye rail",
   "iou": 0.468,
-  "dxL": 0.0242,
-  "dxR": 0.024,
+  "dxL": 0.0334,
+  "dxR": 0.0328,
   "dzBack": -0.0332
  },
  "helmet_lshz2dtm": {
@@ -199,8 +199,8 @@
   "sx": 1.0,
   "auto": "eye band",
   "iou": 0.326,
-  "dxL": 0.032,
-  "dxR": 0.0391,
+  "dxL": 0.0419,
+  "dxR": 0.0543,
   "dzBack": -0.048
  },
  "helmet_diamond_age_bastion": {
@@ -211,8 +211,8 @@
   "sx": 1.0,
   "auto": "eye band",
   "iou": 0.372,
-  "dxL": 0.0278,
-  "dxR": 0.0279,
+  "dxL": 0.0459,
+  "dxR": 0.0447,
   "dzBack": -0.036
  },
  "helmet_6b47": {
@@ -223,8 +223,8 @@
   "sx": 1.0,
   "auto": "eye band",
   "iou": 0.42,
-  "dxL": 0.0399,
-  "dxR": 0.0471,
+  "dxL": 0.0469,
+  "dxR": 0.0552,
   "dzBack": -0.0453
  },
  "helmet_6b47covered": {
@@ -235,8 +235,8 @@
   "sx": 1.0,
   "auto": "eye band",
   "iou": 0.394,
-  "dxL": 0.0324,
-  "dxR": 0.0471,
+  "dxL": 0.0558,
+  "dxR": 0.0588,
   "dzBack": -0.0603
  },
  "facecover_devtac": {
@@ -245,8 +245,8 @@
   "pitch": 0.0,
   "s": 1.0,
   "sx": 1.0,
-  "dxL": -0.0092,
-  "dxR": -0.0073,
+  "dxL": -0.0003,
+  "dxR": 0.0079,
   "dzBack": -0.0212
  }
 }

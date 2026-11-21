@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.4");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.5");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -145,15 +145,16 @@ public class FpanoMod(
                 foreach (var r in made["rails"]) t.Properties.ConflictingItems.Add(r);
             }
 
-        // The rails on the helmets: in the slot that holds the helmet headsets, or a new slot on NVG helmets without one.
+        // The rails on the helmets whose own rails come off (railHelmets: the nine shapes whose rails are separate pieces;
+        // the client hides them while the RAILINK is on, user: "那就只让它能够装在这 9 种头盔上面"): in the slot that holds
+        // the helmet headsets, or a new slot on those without one.
+        var railHelmets = db["railHelmets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
         var headsets = db["railHeadsets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
         string newSlot = db["newHelmetSlot"]!.GetValue<string>();
         int joined = 0, added = 0;
         foreach (var it in templateTable.Items.Values)
         {
-            if (it.Parent != Head || it.Properties?.Slots is not { } hs) continue;
-            bool nvgHelmet = hs.Any(s => s.Name == "mod_nvg" && (s.Properties?.Filters ?? []).Any(f => f.Filter?.Contains(gpnvg) == true));
-            if (!nvgHelmet) continue;
+            if (it.Parent != Head || it.Properties?.Slots is not { } hs || !railHelmets.Contains(it.Id)) continue;
             var headsetSlot = hs.FirstOrDefault(s => (s.Properties?.Filters ?? []).Any(f => f.Filter?.Any(headsets.Contains) == true));
             if (headsetSlot is not null)
             {
