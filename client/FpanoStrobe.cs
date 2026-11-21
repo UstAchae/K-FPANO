@@ -219,6 +219,7 @@ internal sealed class FpanoLamp : MonoBehaviour
         var lamp = model.AddComponent<FpanoLamp>();
         lamp._looks = id == MpA || id == MpB ? Mpls : Hl2a;
         lamp._modes = FpanoGlow.Modes(model.transform, lamp._looks.Length);
+        FpanoProbe.LampLights.AddRange(model.GetComponentsInChildren<Light>(true));
         lamp._lens = FpanoGlow.FindDeep(model.transform, "lamp_lens");
         if (lamp._lens != null && FpanoGlow.Ready())
             lamp._block = new MaterialPropertyBlock();

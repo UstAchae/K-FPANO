@@ -168,6 +168,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
+        FpanoProbe.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
@@ -482,7 +483,7 @@ internal static class EnvgFusion
     private static readonly int CamToWorldId = Shader.PropertyToID("_EnvgCamToWorld");
     private static readonly int TanId = Shader.PropertyToID("_EnvgTan");
 
-    internal static bool Active => EnvgFusionPlugin.On?.Value == true || EnvgbDown;
+    internal static bool Active => (EnvgFusionPlugin.On?.Value == true || EnvgbDown) && !FpanoProbe.ThermalOff;
 
     // ---- the device: the F-PANO (either colour) on the local player's head, flipped down ----
     private static readonly string[] EnvgbIds = { "6a4f9a400000000000000001", "6a4f9a400000000000000002" };   // the F-PANO, FDE and black
