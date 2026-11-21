@@ -68,6 +68,7 @@ internal static class FpanoRailink
     // where each helmet headset sits on the rails (item/railink_headsets.json): fpano_railink/mod_equipment's local pose
     // under fpano_railink, mapped from that headset's own helmet; a headset not in it: the prefab's place (the RAC's)
     private static Dictionary<string, Pose>? _headsets;
+    private static readonly Dictionary<string, Pose> _onRails = new Dictionary<string, Pose>();   // the same on rails with no helmet: local under fpano_railink
     private static Dictionary<string, Pose> Headsets()
     {
         if (_headsets != null)
@@ -89,6 +90,11 @@ internal static class FpanoRailink
                 if (pos == null || rot == null)
                     continue;
                 _headsets[entry.Name] = new Pose { P = Vec(pos), R = new Quaternion((float)rot[0]!, (float)rot[1]!, (float)rot[2]!, (float)rot[3]!), S = Vector3.one };
+                var bare = entry.Value["onRails"];
+                var barePos = bare?["pos"];
+                var bareRot = bare?["rot"];
+                if (barePos != null && bareRot != null)
+                    _onRails[entry.Name] = new Pose { P = Vec(barePos), R = new Quaternion((float)bareRot[0]!, (float)bareRot[1]!, (float)bareRot[2]!, (float)bareRot[3]!), S = Vector3.one };
             }
         }
         catch (System.Exception e)
@@ -110,6 +116,12 @@ internal static class FpanoRailink
         {
             node.SetPositionAndRotation(helmetRoot.TransformPoint(p.P), helmetRoot.rotation * p.R);
             placed = true;
+        }
+        else if (helmetRoot == null && id.Length > 0 && Headsets() != null && _onRails.TryGetValue(id, out Pose bare))
+        {
+            // the rails on no helmet (an icon, loot): the headset where it sits on them
+            node.localPosition = bare.P;
+            node.localRotation = bare.R;
         }
         else
             Restore(node);
@@ -680,6 +692,8 @@ internal static class FpanoRailink
             for (Transform? t = smr.transform; to == null && t != null; t = t.parent)
                 to = t.Find("fpano_power_socket");
             n++;
+            // shown only plugged into the rails (off on its own placeholder: a lone F-PANO's icon not stretched by it)
+            smr.enabled = socket != null && to == socket;
             if (to == null || bones[1] == to)
                 continue;
             // (its bounds are laid around bone 1: they move to the new socket with it)
