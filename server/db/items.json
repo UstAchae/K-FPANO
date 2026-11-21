@@ -14,10 +14,6 @@
   "MOD_EQUIPMENT_RAILINK": {
    "en": "RAILS",
    "ch": "导轨"
-  },
-  "MOD_BATTERY": {
-   "en": "BATTERY",
-   "ch": "电池"
   }
  },
  "trader": "5935c25fb3acc3127c3d8cd9",
@@ -26,22 +22,22 @@
   "rails": {
    "clone": "5a398b75c4a282000a51a266",
    "handbook": "5b5f755f86f77447ec5d770e",
-   "price": 65000,
-   "usd": 650,
+   "price": 83000,
+   "usd": 830,
    "loyalty": 3,
-   "weight": 0.35,
+   "weight": 0.6,
    "width": 2,
    "height": 1,
    "locales": {
     "en": [
-     "Ops-Core RAILINK powered rails",
+     "Ops-Core RAILINK powered rails with Battery Pack+",
      "RAILINK",
-     "Ops-Core ARC rails that carry power and data around the helmet from a battery pack on its back. They take the place of the helmet's own rails and headset mount: a helmet headset, the battery pack, two ARC rail adapters and the F-PANO goggle mount fit on them. With the rails on, the helmet takes no other night vision device."
+     "Ops-Core ARC rails with the RAILINK Battery Pack+ (six AA lithium cells) on the back of the helmet; they carry power and data to the devices on the rails. They take the place of the helmet's own rails and headset mount: a helmet headset, the F-PANO goggle and two ARC rail adapters fit on them. With the rails on, the helmet takes no other night vision device; the F-PANO gets its power from them."
     ],
     "ch": [
-     "Ops-Core RAILINK 供电导轨",
+     "Ops-Core RAILINK 供电导轨（带 Battery Pack+ 电池盒）",
      "RAILINK",
-     "Ops-Core ARC 导轨，由头盔后部的电池盒沿导轨向前供电、传输数据。它取代头盔自带的导轨和耳机座：上面可以装头盔耳机、电池盒、两个 ARC 导轨转接座和 F-PANO 夜视仪支架。装上导轨后，头盔不能再装其他夜视仪。"
+     "Ops-Core ARC 导轨，后部带 RAILINK Battery Pack+ 电池盒（6 节 AA 锂电池），沿导轨为上面的设备供电、传输数据。它取代头盔自带的导轨和耳机座：上面可以装头盔耳机、F-PANO 夜视仪和两个 ARC 导轨转接座。装上导轨后，头盔不能再装其他夜视仪；F-PANO 由它供电。"
     ]
    }
   },
@@ -99,12 +95,12 @@
     "en": [
      "L3Harris F-PANO fused panoramic night vision goggles",
      "F-PANO",
-     "Fused Panoramic Night Vision Goggle: the four-tube, 97 degree panoramic goggle with a thermal channel added. Four white phosphor image intensifier tubes; a small thermal camera above the right inner tube lays its picture over that tube's image. Comes on its own adjustable, flip-up helmet mount; needs RAILINK rails on the helmet, which power it."
+     "Fused Panoramic Night Vision Goggle: the four-tube, 97 degree panoramic goggle with a thermal channel added. Four white phosphor image intensifier tubes; a small thermal camera above the right inner tube lays its picture over that tube's image. Comes on its own adjustable, flip-up helmet mount; fits the helmets that take the RAILINK rails, and the rails themselves. It is powered by the RAILINK rails: without them on the helmet it gives no picture."
     ],
     "ch": [
      "L3Harris F-PANO 融合全景夜视仪",
      "F-PANO",
-     "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。自带可调、可上翻的头盔支架；头盔上必须装有 RAILINK 导轨，由导轨供电。"
+     "融合全景夜视仪：在四管、97 度视场的全景夜视仪上加了一路热成像。四支白磷像增强管；右侧内管上方有一台小型热像仪，它的画面叠加在这根管的图像上。自带可调、可上翻的头盔支架；可装在能装 RAILINK 导轨的头盔上，也可直接装在导轨上。由 RAILINK 导轨供电：头盔上没有导轨时没有画面。"
     ]
    }
   }

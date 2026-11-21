@@ -69,7 +69,10 @@ def helmet_slots(path):
         return m
     by = {t.m_GameObject.read().m_Name: world(t) for t in T.values()}
     root = np.linalg.inv(by['mod_nvg'] @ G)
-    return {k: root @ v for k, v in by.items() if k.startswith('mod_')}
+    out = {k: root @ v for k, v in by.items() if k.startswith('mod_')}
+    out['mod_nvg_world'] = by['mod_nvg'] @ G                     # the F-PANO root frame in the helmet's root frame
+    out.update({'__root_' + k: v for k, v in by.items() if k.startswith('mod_')})   # slots in the helmet's root frame
+    return out
 
 
 def split(out, info):
@@ -87,12 +90,13 @@ def split(out, info):
     goggle.append(node('fpano_power_socket', '', W['fpano_power_socket']))
     goggle.append(dict(by['fpano_power_cable'], hidden=True))  # shown by the client once bound to the rails' socket
     # rails: the group, its bones, the rails and inner parts, the socket; slot nodes
+    # the battery is part of the rails since 0.2.15 (user: "把电池和 RALINK 做成一个物品吧"), on the back bone
     rails = [dict(by[n]) for n in ('fpano_railink', 'fpano_railink_L', 'fpano_railink_R', 'fpano_railink_back',
-                                   'fpano_power_socket', 'fpano_railink_rails', 'fpano_railink_inside')]
-    # the battery's slot at the battery's centre, the battery prefab centred on its root (so its icon frames it)
+                                   'fpano_power_socket', 'fpano_railink_rails', 'fpano_railink_inside', 'fpano_railink_battery')]
     bv = read_bin(out / 'fpano_railink_battery.bin')[0]; bc = (bv.min(0) + bv.max(0)) / 2
-    Tc = np.eye(4); Tc[:3, 3] = bc
-    rails.append(node('mod_battery', 'fpano_railink_back', Tc @ Gi))
+    # the F-PANO on the rails (user: "让 F-PANO 也能装在 RALINK 上面"): its slot where a helmet's mod_nvg puts it, so the
+    # goggle's root is the rails' root (on a helmet the client puts this node on the helmet's own mod_nvg)
+    rails.append(node('mod_nvg', '', Gi))
     fits = json.loads((ITEM / 'railink_fit.json').read_text())
     def group_inv(tpl):
         fit = fits[tpl]; sc = fit['scale'][0] if isinstance(fit['scale'], list) else fit['scale']
@@ -110,7 +114,10 @@ def split(out, info):
         env = UnityPy.load(str(WIN / path))
         t = next(o.read() for o in env.objects if o.type.name == 'Transform' and o.read().m_GameObject.read().m_Name == slot)
         q = t.m_LocalRotation; p = t.m_LocalPosition
-        gi, _ = group_inv(tpl); m = unscaled(gi @ helmet_slots(path)[slot])   # on rails with no helmet: as on its own helmet's rails
+        # on rails with no helmet: as on the head under the FAST (the rails' own shape, fit about 1:1), the same place
+        # relative to the head as on a helmet; through its own helmet's scaled fit it hung below the rails (0.2.14)
+        fast_root = np.linalg.inv(helmet_slots(FAST)['mod_nvg_world'])
+        m = unscaled(Lgi @ fast_root @ helmet_slots(path)['__root_' + slot])
         for i in ids: heads[i] = {'pos': [p.x, p.y, p.z], 'rot': [q.x, q.y, q.z, q.w], 'frame': 'helmet root',
                                   'onRails': {'pos': [float(v) for v in m[:3, 3]], 'rot': mat2quat(m[:3, :3]).tolist(), 'frame': 'fpano_railink local'}}
     (ITEM / 'railink_headsets.json').write_text(json.dumps(heads, indent=1))
@@ -125,7 +132,7 @@ def split(out, info):
     rails.append(node('mod_mount_000', side, left)); rails.append(node('mod_mount_001', other, right))
     for n in rails:
         if n['name'] in ('fpano_railink_rails', 'fpano_railink_inside'): n['bones'] = ['fpano_railink_back', 'fpano_railink_L', 'fpano_railink_R']
-    battery = [dict(by['fpano_railink_battery'], parent='', pos=(-bc).tolist())]
+    battery = [dict(by['fpano_railink_battery'], parent='', pos=(-bc).tolist())]   # kept for owned copies; fits nowhere
     for item, ns in (('rails', rails), ('battery', battery), ('mount', mount), ('goggle', goggle)):  # mount: kept for owned copies
         (out / f'info_{item}.json').write_text(json.dumps({**{k: v for k, v in info.items() if k != 'nodes'}, 'item': item,
                                                            'root': f'{ITEMS[item]}_{info["colour"]}', 'nodes': ns}, indent=1))
