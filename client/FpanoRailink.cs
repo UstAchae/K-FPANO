@@ -308,6 +308,9 @@ internal static class FpanoRailink
             n++;
             if (to == null || bones[1] == to)
                 continue;
+            // (its bounds are laid around bone 1: they move to the new socket with it)
+            if (smr.rootBone == bones[1])
+                smr.rootBone = to;
             bones[1] = to;
             smr.bones = bones;
         }
