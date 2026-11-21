@@ -115,9 +115,9 @@ internal sealed class FpanoStrobe : MonoBehaviour
     {
         new FpanoGlow.Look { Ir = true, Colour = Color.white * 5f, Size = 0.15f, Shape = new Vector4(0.10f, 0.40f, 0.8f, 0.010f) },
         new FpanoGlow.Look { Ir = true, Colour = Color.white * 14f, Size = 0.30f, Shape = new Vector4(0.10f, 0.45f, 1.2f, 0.010f) },
-        // the dome: about its own size, a hot core, hardly a halo
-        new FpanoGlow.Look { Ir = false, Colour = Color.white * 1.2f, Size = 0.012f, Shape = new Vector4(0.55f, 0.75f, 0f, 0f) },
-        new FpanoGlow.Look { Ir = false, Colour = Color.white * 2.5f, Size = 0.015f, Shape = new Vector4(0.55f, 0.75f, 0f, 0f) },
+        // the dome lit as a tritium dot is: its own size, no halo, below the game's bloom threshold (so not spread)
+        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.45f, Size = 0.007f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
+        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.85f, Size = 0.008f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
     };
 
     private Light[] _lights = new Light[0];
