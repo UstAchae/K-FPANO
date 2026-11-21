@@ -74,6 +74,9 @@ internal static class FpanoRailink
     private static readonly Dictionary<string, Pose> _onRails = new Dictionary<string, Pose>();
     private static readonly Dictionary<string, string> _onRailsFit = new Dictionary<string, string>();
     private static readonly Dictionary<string, Pose> _onGroup = new Dictionary<string, Pose>();
+    // per rail helmet (the rails' sides sit closer on narrow shells): the slot node's pose under fpano_railink and the
+    // headset squeezed sideways (S.x) so both arm clips meet the rails; keyed headset + "/" + helmet
+    private static readonly Dictionary<string, Pose> _perHelmet = new Dictionary<string, Pose>();
     private static Dictionary<string, Pose> Headsets()
     {
         if (_headsets != null)
@@ -112,6 +115,16 @@ internal static class FpanoRailink
                 var groupedRot = grouped?["rot"];
                 if (groupedPos != null && groupedRot != null)
                     _onGroup[entry.Name] = new Pose { P = Vec(groupedPos), R = new Quaternion((float)groupedRot[0]!, (float)groupedRot[1]!, (float)groupedRot[2]!, (float)groupedRot[3]!), S = Vector3.one };
+                if (entry.Value["perHelmet"] is Newtonsoft.Json.Linq.JObject perHelmet)
+                    foreach (var helmet in perHelmet.Properties())
+                    {
+                        var hp = helmet.Value["pos"];
+                        var hr = helmet.Value["rot"];
+                        if (hp == null || hr == null)
+                            continue;
+                        float squeeze = (float?)helmet.Value["scaleX"] ?? 1f;
+                        _perHelmet[entry.Name + "/" + helmet.Name] = new Pose { P = Vec(hp), R = new Quaternion((float)hr[0]!, (float)hr[1]!, (float)hr[2]!, (float)hr[3]!), S = new Vector3(squeeze, 1f, 1f) };
+                    }
             }
         }
         catch (System.Exception e)
@@ -124,18 +137,20 @@ internal static class FpanoRailink
     // the rails' headset slot node placed for the headset in it: the table's pose is relative to the helmet model's root
     // (the cups on the ears as on the headset's own helmet); none, one not in the table, or the rails on no helmet: as
     // the prefab has it
-    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset, Transform? helmetRoot, Transform railsRoot)
+    private static void PlaceHeadset(Transform node, EFT.InventoryLogic.Item? headset, Transform? helmetRoot, Transform railsRoot, string helmetId)
     {
         Remember(node);
         string id = headset != null ? headset.TemplateId.ToString() : "";
         bool placed = false;
-        if (helmetRoot != null && id.Length > 0 && Headsets() != null && _onGroup.TryGetValue(id, out Pose g) && node.parent != null)
+        if (helmetRoot != null && id.Length > 0 && Headsets() != null && node.parent != null
+            && (_perHelmet.TryGetValue(id + "/" + helmetId, out Pose g) || _onGroup.TryGetValue(id, out g)))
         {
-            // with the rails (their place on this helmet), at the rails' own size taken off so the headset keeps its own
+            // with the rails (their place on this helmet: its own fit where the table has one), at the rails' own size
+            // taken off so the headset keeps its own, squeezed sideways where the rails sit narrower (g.S.x)
             node.localPosition = g.P;
             node.localRotation = g.R;
             Vector3 own = _prefab[node.GetInstanceID()].S, scale = node.parent.localScale;
-            node.localScale = new Vector3(own.x / Mathf.Max(scale.x, 1e-6f), own.y / Mathf.Max(scale.y, 1e-6f), own.z / Mathf.Max(scale.z, 1e-6f));
+            node.localScale = new Vector3(g.S.x * own.x / Mathf.Max(scale.x, 1e-6f), g.S.y * own.y / Mathf.Max(scale.y, 1e-6f), g.S.z * own.z / Mathf.Max(scale.z, 1e-6f));
             placed = true;
         }
         else if (helmetRoot != null && id.Length > 0 && Headsets().TryGetValue(id, out Pose p))
@@ -716,7 +731,7 @@ internal static class FpanoRailink
         // the headset (its node under the group: placed after it)
         Transform? headsetNode = group != null ? group.Find("mod_equipment") : null;
         if (headsetNode != null)
-            PlaceHeadset(headsetNode, headset, helmetNvg != null ? helmetRoot : null, rails);
+            PlaceHeadset(headsetNode, headset, helmetNvg != null ? helmetRoot : null, rails, helmetId);
         // the helmet's own rails off
         if (helmetRoot != null && helmet != null && helmetNvg != null)
             Rail(helmetRoot, ShapeOf(helmet), rails);
