@@ -3,8 +3,8 @@
 #   rails    the RAILINK rails: fpano_railink (moved per helmet by the client) with its L / R / back bones, the rails
 #            and their inner parts (skinned), the power socket; slot nodes: mod_battery (on the back bone), mod_equipment
 #            (headset; the client sets it per headset from railink_headsets.json), mod_mount_000 / 001 (ARC rail
-#            adapters, left / right), mod_nvg (the F-PANO mount; the client puts it on the helmet's own mod_nvg; the
-#            user kept the mount and goggle under the rails: "还是保留 F-PANO 和它的支架做进导轨的子分支里面吧");
+#            adapters, left / right). The F-PANO mount goes in the helmet's own mod_nvg (user, asked: "支架装在头盔夜视仪
+#            槽"; the client refuses it on a helmet without the rails);
 #   battery  the RAILINK Battery Pack+ alone, in the group's frame (its slot node cancels the game's turn);
 #   mount    the F-PANO mount: the Base plate and the jointed arm (carriage, axis = flip hinge, frame, tilt, arm, slide),
 #            a mod_nvg slot node where the goggle's device node was;
@@ -96,8 +96,10 @@ def split(out, info):
     # rails: the group, its bones, the rails and inner parts, the socket; slot nodes
     rails = [dict(by[n]) for n in ('fpano_railink', 'fpano_railink_L', 'fpano_railink_R', 'fpano_railink_back',
                                    'fpano_power_socket', 'fpano_railink_rails', 'fpano_railink_inside')]
-    rails.append(node('mod_nvg', '', Gi))                      # the client sets it on the helmet's own mod_nvg
-    rails.append(node('mod_battery', 'fpano_railink_back', Gi))
+    # the battery's slot at the battery's centre, the battery prefab centred on its root (so its icon frames it)
+    bv = read_bin(out / 'fpano_railink_battery.bin')[0]; bc = (bv.min(0) + bv.max(0)) / 2
+    Tc = np.eye(4); Tc[:3, 3] = bc
+    rails.append(node('mod_battery', 'fpano_railink_back', Tc @ Gi))
     fits = json.loads((ITEM / 'railink_fit.json').read_text())
     def group_inv(tpl):
         fit = fits[tpl]; sc = fit['scale'][0] if isinstance(fit['scale'], list) else fit['scale']
@@ -128,7 +130,7 @@ def split(out, info):
     rails.append(node('mod_mount_000', side, left)); rails.append(node('mod_mount_001', other, right))
     for n in rails:
         if n['name'] in ('fpano_railink_rails', 'fpano_railink_inside'): n['bones'] = ['fpano_railink_back', 'fpano_railink_L', 'fpano_railink_R']
-    battery = [dict(by['fpano_railink_battery'], parent='')]
+    battery = [dict(by['fpano_railink_battery'], parent='', pos=(-bc).tolist())]
     for item, ns in (('rails', rails), ('battery', battery), ('mount', mount), ('goggle', goggle)):
         (out / f'info_{item}.json').write_text(json.dumps({**{k: v for k, v in info.items() if k != 'nodes'}, 'item': item,
                                                            'root': f'{ITEMS[item]}_{info["colour"]}', 'nodes': ns}, indent=1))

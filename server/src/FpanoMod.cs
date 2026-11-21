@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.8");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.9");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -33,10 +33,11 @@ public record ModMetadata : IModMetadata
 //   rails   the Ops-Core RAILINK powered rails. They take the helmet's headset slot (the one that holds the Ops-Core RAC
 //           or the EXFIL ComTac headsets) or, on NVG helmets without one, a new slot (newHelmetSlot). Their own slots:
 //           mod_equipment (those helmet headsets), mod_battery, mod_mount_000 / 001 (the two Ops-Core ARC rail
-//           adapters, so every helmet light), mod_nvg (only the F-PANO mount). They conflict with every other NVG
+//           adapters, so every helmet light). They conflict with every other NVG
 //           and NVG mount, so a helmet with them takes no other night vision;
 //   battery the RAILINK Battery Pack+;
-//   mount   the F-PANO mount (a Norotos TATM clone), only in the rails' mod_nvg: no RAILINK, no F-PANO;
+//   mount   the F-PANO mount (a Norotos TATM clone), in the helmet's own mod_nvg on the rail helmets; the client
+//           refuses it on a helmet without the rails;
 //   goggle  the F-PANO (a GPNVG-18 clone), only in the F-PANO mount.
 [Injectable(InjectionType.Transient, TypePriority = OnLoadOrder.Preload + 50000)]
 public class FpanoMod(
@@ -112,7 +113,6 @@ public class FpanoMod(
                     slots.Add(Slot("mod_battery", Ids(made["battery"])));
                     slots.Add(Slot("mod_mount_000", Strs(db["railAdapters"])));
                     slots.Add(Slot("mod_mount_001", Strs(db["railAdapters"])));
-                    slots.Add(Slot("mod_nvg", Ids(made["mount"])));
                     props["ConflictingItems"] = Ids(otherNvgs);
                     break;
                 case "mount":
@@ -122,6 +122,7 @@ public class FpanoMod(
                     // White phosphor, the same blue-white as the K-ENVG-B goggle (measured from the look the user picked).
                     props["Color"] = new JsonObject { ["r"] = 156, ["g"] = 217, ["b"] = 255, ["a"] = 254 };
                     props["Intensity"] = 1.4;
+                    props["ExtraSizeRight"] = 1;   // on its 1x1 mount the pair takes two cells (user: "F-PANO 装在支架上也占用两个空间")
                     break;
             }
             props["Slots"] = slots;
@@ -136,6 +137,14 @@ public class FpanoMod(
                        k["usd"]!.GetValue<double>(), k["loyalty"]!.GetValue<int>());
             created++;
         }
+
+        // The mount goes in the helmet's own mod_nvg, on the helmets that take the rails (user: "支架装在头盔夜视仪槽");
+        // the client refuses it on a helmet without the rails.
+        var mountHelmets = db["railHelmets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
+        foreach (var hid in mountHelmets)
+            if (templateTable.Items.TryGetValue(hid, out var h))
+                foreach (var s in h.Properties?.Slots ?? [])
+                    if (s.Name == "mod_nvg") foreach (var f in s.Properties?.Filters ?? []) foreach (var m in made["mount"]) f.Filter!.Add(m);
 
         // Conflicts both ways: every other NVG and mount conflicts with the rails.
         foreach (var nv in otherNvgs)

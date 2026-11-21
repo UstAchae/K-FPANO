@@ -143,6 +143,14 @@ public static class FpanoBuilder {
   var pivot=root.AddComponent<PreviewPivot>();
   pivot.pivotPosition=b.center;pivot.pivotRotation=new Quaternion(0.0074694254f,0.98476535f,0.04375f,-0.16812912f);pivot.scale=Vector3.one;
   pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(-0.049385615f,-0.94817758f,-0.25407037f,0.1843058f),boundsScale=1.8080130f,perspective=15,orthographicSize=10};
+  if(item=="mount"){  // as the Norotos TATM (a 1x1 mount): its view angles and framing
+   pivot.pivotRotation=new Quaternion(0f,1f,0f,-4.371139e-08f);pivot.scale=Vector3.one*1.4285715f;
+   pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(0f,0.94551843f,0f,-0.3255687f),boundsScale=0.9000013f,perspective=15,orthographicSize=10};
+  }
+  if(item=="battery"){  // a 1x1 helmet accessory, as the RAC headset frames it, seen from behind (its switch side)
+   pivot.pivotRotation=new Quaternion(0f,1f,0f,-4.371139e-08f);
+   pivot.Icon=new PreviewPivot.IconSettings{rotation=new Quaternion(0f,0.09584612f,0f,0.99539614f),boundsScale=0.852f,perspective=15,orthographicSize=10};
+  }
   string prefab=gen+"/"+name+".prefab";PrefabUtility.SaveAsPrefabAsset(root,prefab);UnityEngine.Object.DestroyImmediate(root);
   return new AssetBundleBuild{assetBundleName=BundleKey(item,colour),assetNames=new[]{prefab}};
  }
