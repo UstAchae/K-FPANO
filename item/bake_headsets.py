@@ -92,6 +92,7 @@ def mesh_of(hid):
 
 
 MESH_NODE = {}
+SEAT = {}
 
 
 def islands(V, tris):
@@ -129,14 +130,31 @@ def bake(hid, tpl, mesh, own):
     TC = {}
     for s in (-1, 1):
         mi = lab == mounts[s]; Mv = P0[mi]
-        back_x = np.abs(Mv[:, 0]).min(); pc = Mv[np.abs(Mv[:, 0]) < back_x + 0.003].mean(0)
-        co, Fo = face_frame(own_rail, pc, s); _, Fo2 = face_frame(own_rail, pc * [-1, 1, 1], -s)
-        t_ = np.array([0.0, (Fo[1, 0] + Fo2[1, 0]) / 2, (Fo[2, 0] + Fo2[2, 0]) / 2]); nO = Fo[:, 1]
-        t_ -= nO * (t_ @ nO); t_ /= np.linalg.norm(t_); Fo = np.column_stack([t_, nO, np.cross(t_, nO)])
+        # the bar's own frame from its back plate: the mount's vertices within 4 mm of its deepest point along the
+        # outward direction (x * side); long axis and plate normal by PCA of those, "across" pointing up
+        n0 = np.array([float(s), 0.0, 0.0]); dep = Mv @ n0; plate = Mv[dep < dep.min() + 0.004]; pcen = plate.mean(0)
+        u_, sv_, vt_ = np.linalg.svd(plate - pcen, full_matrices=False)
+        e3 = vt_[2] * np.sign(vt_[2] @ n0); e1 = vt_[0] - e3 * (vt_[0] @ e3); e1 /= np.linalg.norm(e1)
+        e2 = np.cross(e3, e1)
+        if e2[1] < 0: e1 = -e1; e2 = -e2                          # across points up: the hub stays above the bar
+        Fb = np.column_stack([e1, e3, e2])
+        # the RAILINK there: the face plane (outer envelope) and the run along the channel's middle (the mean of the
+        # top and bottom edges' slopes; the top edge alone left it 5 deg flat)
         face, mid, _ = rail_band(RV, zs, s)
-        cn, Fn = face_frame(RV, np.array([s * face, mid, zs]), s)
-        Rm = Fn @ Fo.T; Ta = np.eye(4); Ta[:3, :3] = Rm; Ta[:3, 3] = cn - Rm @ co
+        cn, Fn = face_frame(RV, np.array([s * face, mid, zs]), s); nR = Fn[:, 1]
+        zz = np.linspace(zs + 0.02, zs - 0.02, 9); tops, lows = [], []
+        for z2 in zz:
+            q = RV[(np.sign(RV[:, 0]) == s) & (np.abs(RV[:, 0]) > 0.06) & (np.abs(RV[:, 2] - z2) < 0.002) & (np.abs(RV[:, 1] - mid) < 0.04)]
+            tops.append(q[:, 1].max()); lows.append(q[:, 1].min())
+        k = (np.polyfit(zz, tops, 1)[0] + np.polyfit(zz, lows, 1)[0]) / 2
+        tR = np.array([0.0, -k, -1.0]); tR -= nR * (tR @ nR); tR /= np.linalg.norm(tR)
+        aR = np.cross(nR, tR)
+        if aR[1] < 0: tR = -tR; aR = -aR
+        FR = np.column_stack([tR, nR, aR])
+        Rm = FR @ Fb.T
+        Ta = np.eye(4); Ta[:3, :3] = Rm; Ta[:3, 3] = cn - Rm @ pcen                # the plate's centre on the face
         Pn[mi] = xf(Ta, Mv); Nn[mi] = (N[mi] @ W0[:3, :3].T) @ Rm.T
+        SEAT[s] = (float(np.degrees(np.arccos(np.clip(abs(e1 @ Fb[:, 0]), 0, 1)))), len(plate), sv_[:2].round(4).tolist())
         hub = xf(Ta, Mv.mean(0)[None])[0]
         side = [i for i in range(n_isl) if np.sign(cent[i, 0]) == s and i not in (band, mounts[s])]
         cup_i = max(side, key=lambda i: cnt[i]); cupQ = Ph[lab == cup_i]; cup_top = cupQ[:, 1].max()
