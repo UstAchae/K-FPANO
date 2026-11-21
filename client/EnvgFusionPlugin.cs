@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.1.8";
+    public const string Version = "0.1.9";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -150,6 +150,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             Log.LogWarning("Patching the grass draw failed; no grass in the thermal picture: " + e.Message);
         }
         // the sights' glass: the red dots and holographic sights the game has enabled, as it announces them
+        FpanoRailink.Patch(harmony);
         MethodInfo? nvPreCull = AccessTools.Method(typeof(BSG.CameraEffects.NightVision), "OnPreCull");
         if (nvPreCull != null)
             harmony.Patch(nvPreCull, postfix: new HarmonyMethod(typeof(EnvgFusion), nameof(EnvgFusion.AfterNightVisionPreCull)));

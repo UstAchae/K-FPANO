@@ -125,4 +125,104 @@ internal static class FpanoRailink
             }
         }
     }
+    // ---- every other model of the goggle: icons, the inspect window, the inventory, traders, bots, loot ----
+    // The game makes an item's model in ObjectsFactory (an item and what hangs in its slots, as one) and parents a worn
+    // one in PlayerBody's slot view: right after, each F-PANO in the item's slots gets its rails fitted onto the item that
+    // holds it. Only when such a model is made; nothing per frame.
+    private static readonly string[] FpanoIds = { "6a4f9a400000000000000001", "6a4f9a400000000000000002" };
+    private static readonly List<Transform> _made = new List<Transform>();
+    private static readonly HashSet<string> _loggedModel = new HashSet<string>();
+
+    internal static void Patch(HarmonyLib.Harmony harmony)
+    {
+        var post = new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterMade));
+        int patched = 0;
+        foreach (string name in new[] { "CreateItem", "CreateLootPrefab", "CreateCleanLootPrefab" })
+            foreach (var m in typeof(EFT.ObjectsFactory).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static))
+            {
+                if (m.Name != name || m.ReturnType != typeof(GameObject))
+                    continue;
+                var ps = m.GetParameters();
+                if (ps.Length == 0 || ps[0].ParameterType != typeof(EFT.InventoryLogic.Item))
+                    continue;
+                try { harmony.Patch(m, postfix: post); patched++; } catch (System.Exception) { }
+            }
+        var parent = HarmonyLib.AccessTools.Method(typeof(EFT.PlayerBody).GetNestedType("SlotView", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic), "CreateAndParent");
+        if (parent != null)
+        {
+            try { harmony.Patch(parent, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterParented))); patched++; } catch (System.Exception) { }
+        }
+        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: fitted on every model the game makes (" + patched + " places hooked)");
+    }
+
+    private static void AfterMade(EFT.InventoryLogic.Item __0, GameObject __result)
+    {
+        try { FitModel(__result, __0); } catch (System.Exception) { }
+    }
+
+    private static readonly System.Reflection.FieldInfo? SlotViewItem = HarmonyLib.AccessTools.Field(typeof(EFT.PlayerBody).GetNestedType("SlotView", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic), "_item");
+    private static void AfterParented(object __instance, GameObject __1)
+    {
+        try
+        {
+            if (SlotViewItem?.GetValue(__instance) is EFT.InventoryLogic.Item item)
+                FitModel(__1, item);
+        }
+        catch (System.Exception) { }
+    }
+
+    // the goggle in this item's slots, at any depth (null: none)
+    private static EFT.InventoryLogic.Item? FpanoIn(EFT.InventoryLogic.Item item, int depth)
+    {
+        string id = item.TemplateId.ToString();
+        if (id == FpanoIds[0] || id == FpanoIds[1])
+            return item;
+        if (depth > 6 || item is not EFT.InventoryLogic.CompoundItem compound || compound.Slots == null)
+            return null;
+        foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+        {
+            EFT.InventoryLogic.Item? inner = slot?.ContainedItem;
+            if (inner == null)
+                continue;
+            EFT.InventoryLogic.Item? found = FpanoIn(inner, depth + 1);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
+    private static void FitModel(GameObject? model, EFT.InventoryLogic.Item? item)
+    {
+        if (model == null || item == null)
+            return;
+        EFT.InventoryLogic.Item? fpano = FpanoIn(item, 0);
+        if (fpano == null)
+            return;
+        string holderId = "";
+        try { holderId = fpano.Parent?.Container?.ParentItem?.TemplateId.ToString() ?? ""; } catch (System.Exception) { }
+        model.GetComponentsInChildren(true, _made);
+        bool fitted = false;
+        foreach (Transform t in _made)
+            if (t.name == "fpano_railink")
+                fitted |= Place(t, holderId);
+        _made.Clear();
+        if (_loggedModel.Add(holderId + "/" + model.name))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: model " + model.name + " on " + (holderId.Length > 0 ? holderId : "no holder") + ", " + (fitted ? "fitted" : "no fit: left as the prefab has it"));
+    }
+
+    // the group placed for that holder (true), or put back as the prefab has it (false)
+    private static bool Place(Transform node, string holderId)
+    {
+        if (Fits().TryGetValue(holderId, out Fit fit))
+        {
+            node.localPosition = fit.Pos;
+            node.localRotation = fit.Rot;
+            node.localScale = Vector3.one * fit.Scale;
+            return true;
+        }
+        node.localPosition = Vector3.zero;
+        node.localRotation = Quaternion.identity;
+        node.localScale = Vector3.one;
+        return false;
+    }
 }
