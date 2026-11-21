@@ -16,6 +16,7 @@ from fit_profile import helmet_tris
 from fit_manual import local
 
 CELL, CONTACT, QS = 0.002, 0.0005, 0.25
+INSIDE = 0.12
 HIDE = json.loads((ITEM / 'railink_hide.json').read_text()) if (ITEM / 'railink_hide.json').exists() else {}
 
 
@@ -53,6 +54,7 @@ def main():
     shapes = {}
     for tpl, path in sorted(helmets().items()): shapes.setdefault(path.split('/')[-2], path)
     for key, path in shapes.items():
+        if HIDE and key not in HIDE: continue                      # the rails fit only the helmets in railink_hide.json
         T, _ = helmet_tris(path)
         if key in HIDE:                                            # the shell without the own rails the RAILINK replaces
             from rail_islands import renderers
@@ -67,11 +69,12 @@ def main():
             sh = np.array([H.get((int(np.floor(x[1] / CELL)), int(np.floor(x[2] / CELL)), sg), np.nan) for x in Xs]); ok = ~np.isnan(sh)
             if ok.sum() < 30: out[side] = 0.0; continue
             gap = np.abs(Xs[ok, 0]) - sh[ok]
-            # outward until at most 3% of the inner faces lie inside the shell (a binary search on the move)
+            # outward until at most INSIDE of the inner faces lie inside the shell (a binary search on the move); 3% left
+            # a gap where the own rails came off (user: "导轨和头盔之间有空隙，应该让导轨缩小一些贴到头盔表面")
             lo, hi = -0.02, 0.05
             for _ in range(40):
                 mid = (lo + hi) / 2
-                if float((gap + mid < -CONTACT).mean()) > 0.03: lo = mid
+                if float((gap + mid < -CONTACT).mean()) > INSIDE: lo = mid
                 else: hi = mid
             out[side] = hi / p['s']
         # the back (battery and crossbar): moved along the group's Z (+ toward the helmet) so that 2% of its vertices

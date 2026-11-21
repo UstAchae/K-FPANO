@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.9");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.10");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -122,7 +122,6 @@ public class FpanoMod(
                     // White phosphor, the same blue-white as the K-ENVG-B goggle (measured from the look the user picked).
                     props["Color"] = new JsonObject { ["r"] = 156, ["g"] = 217, ["b"] = 255, ["a"] = 254 };
                     props["Intensity"] = 1.4;
-                    props["ExtraSizeRight"] = 1;   // on its 1x1 mount the pair takes two cells (user: "F-PANO 装在支架上也占用两个空间")
                     break;
             }
             props["Slots"] = slots;
@@ -133,18 +132,20 @@ public class FpanoMod(
                 loc[lang] = new JsonObject { ["name"] = $"{a[0]!.GetValue<string>()} ({c})", ["shortName"] = a[1]!.GetValue<string>(), ["description"] = a[2]!.GetValue<string>() };
             }
             if (Create(node, loc, options, k["handbook"]!.GetValue<string>(), k["price"]!.GetValue<double>(), id) is not MongoId newId) continue;
-            AddListing(newId, new MongoId(e["assort"]!.GetValue<string>()), db["trader"]!.GetValue<string>(), db["currency"]!.GetValue<string>(),
+            if (kind != "mount") AddListing(newId, new MongoId(e["assort"]!.GetValue<string>()), db["trader"]!.GetValue<string>(), db["currency"]!.GetValue<string>(),
                        k["usd"]!.GetValue<double>(), k["loyalty"]!.GetValue<int>());
             created++;
         }
 
         // The mount goes in the helmet's own mod_nvg, on the helmets that take the rails (user: "支架装在头盔夜视仪槽");
         // the client refuses it on a helmet without the rails.
+        // Since 0.2.10 the goggle carries its mount (user: "要不支架和 F-PANO 做成一个物品吧"): the goggle goes there; the
+        // separate mount stays a known item (owned copies load) but fits nowhere and is not sold.
         var mountHelmets = db["railHelmets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
         foreach (var hid in mountHelmets)
             if (templateTable.Items.TryGetValue(hid, out var h))
                 foreach (var s in h.Properties?.Slots ?? [])
-                    if (s.Name == "mod_nvg") foreach (var f in s.Properties?.Filters ?? []) foreach (var m in made["mount"]) f.Filter!.Add(m);
+                    if (s.Name == "mod_nvg") foreach (var f in s.Properties?.Filters ?? []) foreach (var m in made["goggle"]) f.Filter!.Add(m);
 
         // Conflicts both ways: every other NVG and mount conflicts with the rails.
         foreach (var nv in otherNvgs)

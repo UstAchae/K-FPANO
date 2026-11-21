@@ -131,7 +131,7 @@ public static class FpanoBuilder {
   var all=renderers.ToArray();
   var lodGroup=root.AddComponent<LODGroup>();lodGroup.SetLODs(new[]{new LOD(0.02f,all)});lodGroup.size=0.5f;
   var dress=root.AddComponent<Dress>();dress.DecalTextureType=1;dress.Renderers=all;
-  if(item=="mount"){
+  if(item=="mount"||item=="goggle"){
    // The flip on the mount, as the Norotos TATM: CurveRotator turns "axis", NightVisionMount on the root.
    var axis=made["axis"];var on=Q(info.onRotation);var off=Q(info.offRotation);
    if(Quaternion.Angle(axis.localRotation,on)>0.01f)throw new Exception("axis rest rotation is not OnRotation");

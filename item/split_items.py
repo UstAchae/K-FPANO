@@ -80,19 +80,12 @@ def split(out, info):
     mount = [dict(by[n]) for n in mount_names]
     dev = by['nvg_fpano_LOD0']
     mount.append(node('mod_nvg', 'fpano_slide', M(dev['pos'], dev['rot']) @ Gi))
-    # goggle: the device node at the root, its glass; the cable and a placeholder socket in the device's frame
-    Dw = W['nvg_fpano_LOD0']; Di = np.linalg.inv(Dw)
-    goggle = [node('nvg_fpano_LOD0', '', np.eye(4), dev['mesh'], dev['mat']), dict(by['nvg_fpano_glass_LOD0'])]
-    sock = Di @ W['fpano_power_socket']
-    goggle.append(node('fpano_power_socket', '', sock))
-    V, N, T = read_bin(out / 'fpano_power_cable.bin')
-    uv = np.fromfile(out / 'fpano_power_cable.bin', np.float32)  # re-read the uvs below
-    with open(out / 'fpano_power_cable.bin', 'rb') as f:
-        nv = np.fromfile(f, np.int32, 3)[0]; np.fromfile(f, np.float32, nv * 6); U = np.fromfile(f, np.float32, nv * 2).reshape(-1, 2)
-    P = V @ Di[:3, :3].T + Di[:3, 3]; Nn = N @ Di[:3, :3].T
-    write_mesh(out / 'fpano_power_cable.bin', P[T.ravel()], Nn[T.ravel()], U[T.ravel()])
-    cab = dict(by['fpano_power_cable']); cab['weightCentre'] = (Di[:3, :3] @ np.array(cab['weightCentre']) + Di[:3, 3]).tolist()
-    goggle.append(cab)
+    # goggle: the F-PANO WITH its mount, one item (user: "要不支架和 F-PANO 做成一个物品吧"): the mount's nodes, the device
+    # node under the slide as before, its glass; the cable in the root frame, skinned to the device and to a
+    # placeholder socket the client rebinds to the rails' socket.
+    goggle = [dict(by[n]) for n in mount_names] + [dict(dev), dict(by['nvg_fpano_glass_LOD0'])]
+    goggle.append(node('fpano_power_socket', '', W['fpano_power_socket']))
+    goggle.append(dict(by['fpano_power_cable']))
     # rails: the group, its bones, the rails and inner parts, the socket; slot nodes
     rails = [dict(by[n]) for n in ('fpano_railink', 'fpano_railink_L', 'fpano_railink_R', 'fpano_railink_back',
                                    'fpano_power_socket', 'fpano_railink_rails', 'fpano_railink_inside')]
@@ -131,7 +124,7 @@ def split(out, info):
     for n in rails:
         if n['name'] in ('fpano_railink_rails', 'fpano_railink_inside'): n['bones'] = ['fpano_railink_back', 'fpano_railink_L', 'fpano_railink_R']
     battery = [dict(by['fpano_railink_battery'], parent='', pos=(-bc).tolist())]
-    for item, ns in (('rails', rails), ('battery', battery), ('mount', mount), ('goggle', goggle)):
+    for item, ns in (('rails', rails), ('battery', battery), ('mount', mount), ('goggle', goggle)):  # mount: kept for owned copies
         (out / f'info_{item}.json').write_text(json.dumps({**{k: v for k, v in info.items() if k != 'nodes'}, 'item': item,
                                                            'root': f'{ITEMS[item]}_{info["colour"]}', 'nodes': ns}, indent=1))
     return {k: [n['name'] for n in v] for k, v in (('rails', rails), ('battery', battery), ('mount', mount), ('goggle', goggle))}
