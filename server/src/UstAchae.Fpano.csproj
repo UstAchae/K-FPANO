@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <OutputType>Library</OutputType>
-    <Version>0.1.3</Version>
+    <Version>0.1.4</Version>
     <AssemblyName>UstAchae.Fpano</AssemblyName>
     <RootNamespace>UstAchae.Fpano</RootNamespace>
     <EnableDynamicLoading>true</EnableDynamicLoading>
