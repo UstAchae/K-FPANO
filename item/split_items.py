@@ -163,8 +163,11 @@ def split(out, info):
     heads['5a16b9fffcdbcb0176308b34'] = node('mod_equipment', 'fpano_railink', unscaled(Lgi @ rac))
     rails.append(dict(heads['5a16b9fffcdbcb0176308b34']))     # the RAC's place by default
     left = unscaled(Lgi @ mnt); left[:3, 3] -= np.array(fit['left'])   # on the left bone at the FAST's fit
-    rz = np.diag([-1.0, -1.0, 1.0, 1.0])                         # the right side: turned 180 deg about the forward axis
-    right = left.copy(); right[:3, :3] = rz[:3, :3] @ left[:3, :3]; right[:3, 3] = left[:3, 3] * [-1, 1, 1]
+    # the right side: the left's mirror image (the rotation conjugated by the x mirror, still a proper rotation). 0.2.37
+    # turned it 180 deg about the forward axis, which flipped the left's downward tilt to upward: the right PRA / SCRA
+    # stood slanted up (user: "右边的槽位现在是歪的装上去后是斜着朝上的").
+    mx = np.diag([-1.0, 1.0, 1.0])
+    right = left.copy(); right[:3, :3] = mx @ left[:3, :3] @ mx; right[:3, 3] = left[:3, 3] * [-1, 1, 1]
     side = 'fpano_railink_L' if mnt[0, 3] < 0 else 'fpano_railink_R'
     other = 'fpano_railink_R' if side == 'fpano_railink_L' else 'fpano_railink_L'
     rails.append(node('mod_mount_000', side, left)); rails.append(node('mod_mount_001', other, right))

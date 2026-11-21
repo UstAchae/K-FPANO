@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.37");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.38");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -198,7 +198,19 @@ public class FpanoMod(
             foreach (var id in a)
                 if (templateTable.Items.TryGetValue(id, out var t) && t.Properties?.ConflictingItems is { } c)
                     foreach (var o in others) if (c.Remove(o)) freed++;
-        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/mandible conflicts lifted");
+        // The PRA / SCRA rail adapters and the ComTac V / VI conflict (user: "这两个东西应该和 comtac 耳机是冲突的"): on the
+        // RAILINK the ComTac's clip takes the rail run the adapters would use.
+        var adapters = db["railAdapters"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
+        var comtacs = db["railAdapterConflicts"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
+        int bound = 0;
+        foreach (var (a, others) in new[] { (adapters, comtacs), (comtacs, adapters) })
+            foreach (var id in a)
+                if (templateTable.Items.TryGetValue(id, out var t) && t.Properties is not null)
+                {
+                    t.Properties.ConflictingItems ??= [];
+                    foreach (var o in others) if (!t.Properties.ConflictingItems.Contains(o)) { t.Properties.ConflictingItems.Add(o); bound++; }
+                }
+        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/mandible conflicts lifted, {bound} adapter/ComTac conflicts added");
         return Task.CompletedTask;
     }
 
