@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.1.1";
+    public const string Version = "0.1.3";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -266,7 +266,7 @@ internal static class EnvgFusion
         float aspect = Mathf.Max(f.w, 1e-3f), share = EnvgFusionPlugin.ThermalField?.Value ?? 1f;
         if (share <= 0f)
             return new Vector4(0f, 0f, 1f, 1f);
-        float halfH = 0.52f * f.z * share + CropMargin, halfW = (0.68f * f.z * share + CropMargin) / aspect;
+        float halfH = EyepieceLink.FusedRect.y * f.z * share + CropMargin, halfW = (EyepieceLink.FusedRect.x * f.z * share + CropMargin) / aspect;
         int needW = Mathf.Min(fullWidth, Mathf.CeilToInt(2f * halfW * fullWidth)), needH = Mathf.Min(fullHeight, Mathf.CeilToInt(2f * halfH * fullHeight));
         // the crop's size only grows (until the eyepieces let go): a new size makes every texture anew and the history
         // starts over, which showed as a frame of raw bright lines each time the view's field changed (sprinting)
@@ -735,7 +735,7 @@ internal static class EnvgFusion
         _lastFieldFrame = Time.frameCount;
         float radius = Mathf.Max(at.z, 1e-3f), aspect = Mathf.Max(at.w, 1e-3f);
         float share = EnvgFusionPlugin.ThermalField?.Value ?? 1f;
-        Material.SetVector(FieldId, new Vector4(0.68f * radius * share / aspect, 0.52f * radius * share, 4f / Mathf.Max(dest.height, 1), share > 0f ? 1f : 0f));
+        Material.SetVector(FieldId, new Vector4(EyepieceLink.FusedRect.x * radius * share / aspect, EyepieceLink.FusedRect.y * radius * share, 4f / Mathf.Max(dest.height, 1), share > 0f ? 1f : 0f));
         // faded in as the device settles, and out as the right pod (with the thermal module) swings up
         float settled = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f, 1f, EyepieceLink.Deployed)) * EnvgPods.RightShown;
         Material.SetVector(FieldAtId, new Vector4(at.x, at.y, settled, 1f));
