@@ -148,9 +148,16 @@ def split(out, info):
         # ROOT frame (the F-PANO root frame on that helmet). On the FAST shape the EXFIL ComTacs' arms stood 3 cm off
         # the rails each side (user, 0.2.15: "ComTac 耳机和 RALINK 应该相连的部分还是有空隙").
         hs = helmet_slots(path); m = unscaled(np.linalg.inv(hs['mod_nvg_world']) @ hs['__root_' + slot])
+        # onGroup: the same relation to the RAILS, in fpano_railink's local frame (its scaled units; the node itself gets
+        # 1/scale like the other slot nodes), so on any helmet the headset clips onto the rails as fitted there. Placed by
+        # the head instead, the ComTac on the Caiman hung 2.9 cm forward and 1.4 cm low of the rails (user: "耳机装的位置
+        # 也不太合适，应该往后一点，往上一点点").
+        gi, _ = group_inv(tpl); g = gi @ np.linalg.inv(hs['mod_nvg_world']) @ hs['__root_' + slot]
+        gr = unscaled(g)
         for i in ids: heads[i] = {'pos': [p.x, p.y, p.z], 'rot': [q.x, q.y, q.z, q.w], 'frame': 'helmet root',
                                   'onRails': {'pos': [float(v) for v in m[:3, 3]], 'rot': mat2quat(m[:3, :3]).tolist(), 'frame': 'rails root',
-                                              'fit': tpl}}
+                                              'fit': tpl},
+                                  'onGroup': {'pos': [float(v) for v in g[:3, 3]], 'rot': mat2quat(gr[:3, :3]).tolist(), 'frame': 'fpano_railink local, scaled units'}}
     (ITEM / 'railink_headsets.json').write_text(json.dumps(heads, indent=1))
     rac = helmet_slots(FAST)['mod_equipment_001']
     heads['5a16b9fffcdbcb0176308b34'] = node('mod_equipment', 'fpano_railink', unscaled(Lgi @ rac))
@@ -184,24 +191,70 @@ def mirror_bin(src, dst):
 
 
 def split_dome(src, dome, base):
-    """The strobe mesh cut in two by the model's own opacity map: its clear housing (the semi-transparent triangles,
-    opacity < 0.8 at their uv centre) and the rest (the board and base inside). For the client's flash: the dome lights
-    up in its own shape (user's video 20261121-1651: "the whole clear dome lights up warm white, about 3 frames")."""
+    """The strobe's window glass as its own mesh, for the client's flash: only the glass in the figure-8 window lights
+    (user: "这个应该不是整个都闪，只是里面的玻璃材质才闪"; 0.2.24 lit the whole clear housing). The model has no glass
+    piece: the window is the opening of the tan figure-8 frame on the strobe's top, the clear housing showing through
+    it. Seen from above (+y), the frame's triangles (opaque, tan in the base colour) enclose three regions; the window is
+    the middle one. A sheet over it on a 0.25 mm grid, each point dropped onto the clear housing's top surface there,
+    lifted 0.2 mm. `base` is the whole strobe, unchanged."""
+    import cv2
     from PIL import Image
     from prepare import RAILINK_TEX
-    op = np.asarray(Image.open(RAILINK_TEX / 'Helmet_OpsCore_RAILINK_SHSF_Strobe_Opacity.png').convert('L')).astype(float) / 255
+    stem = RAILINK_TEX / 'Helmet_OpsCore_RAILINK_SHSF_Strobe_'
+    op = np.asarray(Image.open(f'{stem}Opacity.png').convert('L')).astype(float) / 255
+    col = np.asarray(Image.open(f'{stem}BaseColor.png').convert('RGB')).astype(float)
+    data = open(src, 'rb').read(); open(base, 'wb').write(data)
     with open(src, 'rb') as f:
         nv, nt, ns = np.fromfile(f, np.int32, 3)
         V = np.fromfile(f, np.float32, nv * 3).reshape(-1, 3); N = np.fromfile(f, np.float32, nv * 3).reshape(-1, 3)
         U = np.fromfile(f, np.float32, nv * 2).reshape(-1, 2); ni = np.fromfile(f, np.int32, 1)[0]; T = np.fromfile(f, np.int32, ni).reshape(-1, 3)
-    uv = U[T].mean(1); h, w = op.shape
-    clear = op[np.clip(((1 - uv[:, 1]) % 1) * h, 0, h - 1).astype(int), np.clip((uv[:, 0] % 1) * w, 0, w - 1).astype(int)] < 0.8
-    for dst, sel in ((dome, clear), (base, ~clear)):
-        t = T[sel]; used = np.unique(t); remap = np.full(nv, -1, np.int32); remap[used] = np.arange(len(used))
-        with open(dst, 'wb') as f:
-            np.array([len(used), len(t), 1], np.int32).tofile(f); V[used].tofile(f); N[used].tofile(f); U[used].tofile(f)
-            np.array([t.size], np.int32).tofile(f); remap[t].astype(np.int32).tofile(f)
-    return int(clear.sum()), int((~clear).sum())
+    h, w = op.shape; uv = U[T].mean(1)
+    rc = (np.clip(((1 - uv[:, 1]) % 1) * h, 0, h - 1).astype(int), np.clip((uv[:, 0] % 1) * w, 0, w - 1).astype(int))
+    o, c = op[rc], col[rc]; P = V[T].astype(float)
+    clear = o < 0.8
+    tan = ~clear & (c[:, 0] > 90) & (c[:, 1] > 80) & (c[:, 0] - c[:, 2] > 20)
+    R = 0.0001; x0, z0 = V[:, 0].min(), V[:, 2].min(); W_ = int(np.ptp(V[:, 0]) / R) + 2; H_ = int(np.ptp(V[:, 2]) / R) + 2
+    m = np.zeros((H_, W_), np.uint8)
+    for t in np.nonzero(tan)[0]:
+        cv2.fillPoly(m, [np.round(np.c_[(P[t, :, 0] - x0) / R, (P[t, :, 2] - z0) / R]).astype(np.int32)], 255)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+    ff = m.copy(); cv2.floodFill(ff, np.zeros((H_ + 2, W_ + 2), np.uint8), (0, 0), 128)
+    n_lab, lab, st, cen = cv2.connectedComponentsWithStats((ff == 0).astype(np.uint8))
+    fy, fx = np.nonzero(m); mid = np.array([fx.mean(), fy.mean()])
+    win = lab == 1 + int(np.argmin([np.linalg.norm(cen[k] - mid) for k in range(1, n_lab)]))   # the middle region
+    step = 0.00025; gx = np.arange(V[:, 0].min(), V[:, 0].max(), step); gz = np.arange(V[:, 2].min(), V[:, 2].max(), step)
+    X, Z = np.meshgrid(gx, gz); inside = win[np.clip(((Z - z0) / R).astype(int), 0, H_ - 1), np.clip(((X - x0) / R).astype(int), 0, W_ - 1)]
+    Y = np.full(X.shape, np.nan)
+    for t in np.nonzero(clear)[0]:                  # the clear housing's top surface over each grid point
+        a, b, cc = P[t]; M2 = np.array([[b[0] - a[0], cc[0] - a[0]], [b[2] - a[2], cc[2] - a[2]]])
+        if abs(np.linalg.det(M2)) < 1e-12: continue
+        lo, hi = P[t].min(0), P[t].max(0); sel = inside & (X >= lo[0]) & (X <= hi[0]) & (Z >= lo[2]) & (Z <= hi[2])
+        if not sel.any(): continue
+        l = np.linalg.solve(M2, np.vstack([X[sel] - a[0], Z[sel] - a[2]]))
+        ok = (l[0] >= -1e-6) & (l[1] >= -1e-6) & (l.sum(0) <= 1 + 1e-6)
+        y = a[1] + l[0] * (b[1] - a[1]) + l[1] * (cc[1] - a[1])
+        idx = tuple(np.array(np.nonzero(sel))[:, ok]); cur = Y[idx]; Y[idx] = np.where(np.isnan(cur) | (y[ok] > cur), y[ok], cur)
+    Y += 0.0002
+    verts, tris = {}, []
+    def vid(i, k):
+        if (i, k) not in verts: verts[(i, k)] = len(verts)
+        return verts[(i, k)]
+    for i in range(X.shape[0] - 1):
+        for k in range(X.shape[1] - 1):
+            q = [(i, k), (i, k + 1), (i + 1, k + 1), (i + 1, k)]
+            if all(inside[a_] and not np.isnan(Y[a_]) for a_ in q):
+                v = [vid(*a_) for a_ in q]; tris += [(v[0], v[2], v[1]), (v[0], v[3], v[2])]
+    keys = sorted(verts, key=verts.get)
+    GV = np.array([[X[a_], Y[a_], Z[a_]] for a_ in keys], np.float32); GT = np.array(tris, np.int32)
+    tn = np.cross(GV[GT[:, 1]] - GV[GT[:, 0]], GV[GT[:, 2]] - GV[GT[:, 0]])
+    if tn[:, 1].mean() < 0: GT = GT[:, [0, 2, 1]]    # facing up, out of the window
+    GN = np.zeros_like(GV); np.add.at(GN, GT.ravel(), np.repeat(np.cross(GV[GT[:, 1]] - GV[GT[:, 0]], GV[GT[:, 2]] - GV[GT[:, 0]]), 3, 0))
+    GN /= np.linalg.norm(GN, axis=1, keepdims=True) + 1e-12
+    GU = np.zeros((len(GV), 2), np.float32)
+    with open(dome, 'wb') as f:
+        np.array([len(GV), len(GT), 1], np.int32).tofile(f); GV.tofile(f); GN.astype(np.float32).tofile(f); GU.tofile(f)
+        np.array([GT.size], np.int32).tofile(f); GT.tofile(f)
+    return len(GV), len(GT)
 
 
 def light_items(out, rails):
