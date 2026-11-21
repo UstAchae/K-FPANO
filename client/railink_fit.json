@@ -1,0 +1,614 @@
+{
+ "5a154d5cfcdbcb001a3b00da": {
+  "pos": [
+   -0.00138,
+   0.01891,
+   -0.01361
+  ],
+  "rot": [
+   -0.068253,
+   -0.002451,
+   0.001351,
+   0.997664
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_opscore_fast/item_equipment_helmet_opscore_fast_black.bundle",
+  "medianGap": 0.0083,
+  "insideShare": 0.086
+ },
+ "5a7c4850e899ef00150be885": {
+  "pos": [
+   0.01842,
+   0.00696,
+   0.00371
+  ],
+  "rot": [
+   0.077327,
+   0.0633,
+   -0.026387,
+   0.994644
+  ],
+  "scale": 1.0694,
+  "prefab": "assets/content/items/equipment/helmet_6b47/item_equipment_helmet_6b47.bundle",
+  "medianGap": 0.0077,
+  "insideShare": 0.038
+ },
+ "5aa7cfc0e5b5b00015693143": {
+  "pos": [
+   0.02899,
+   0.00518,
+   0.0012
+  ],
+  "rot": [
+   0.014924,
+   0.099627,
+   0.023397,
+   0.994638
+  ],
+  "scale": 1.0937,
+  "prefab": "assets/content/items/equipment/helmet_6b47covered/item_equipment_helmet_6b47covered.bundle",
+  "medianGap": 0.006,
+  "insideShare": 0.357
+ },
+ "5ac8d6885acfc400180ae7b0": {
+  "pos": [
+   -0.00138,
+   0.01891,
+   -0.01361
+  ],
+  "rot": [
+   -0.068253,
+   -0.002451,
+   0.001351,
+   0.997664
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_opscore_fast/item_equipment_helmet_opscore_fast_tan.bundle",
+  "medianGap": 0.0083,
+  "insideShare": 0.086
+ },
+ "5b4329f05acfc47a86086aa1": {
+  "pos": [
+   0.00394,
+   -0.01809,
+   -0.0303
+  ],
+  "rot": [
+   0.091267,
+   0.030721,
+   -0.031963,
+   0.994839
+  ],
+  "scale": 1.0011,
+  "prefab": "assets/content/items/equipment/facecover_devtac/item_equipment_facecover_devtac_gen2.bundle",
+  "medianGap": 0.0078,
+  "insideShare": 0.057
+ },
+ "5b432d215acfc4771e1c6624": {
+  "pos": [
+   -0.00254,
+   0.03397,
+   -0.0068
+  ],
+  "rot": [
+   -0.081513,
+   -0.004017,
+   0.000458,
+   0.996664
+  ],
+  "scale": 1.0926,
+  "prefab": "assets/content/items/equipment/helmet_lshz/item_equipment_helmet_lshz.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.047
+ },
+ "5c17a7ed2e2216152142459c": {
+  "pos": [
+   0.01092,
+   0.05155,
+   -0.0059
+  ],
+  "rot": [
+   -0.088045,
+   0.043365,
+   0.034696,
+   0.994567
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_crye_airframe/item_equipment_helmet_crye_airframe_tan.bundle",
+  "medianGap": 0.0087,
+  "insideShare": 0.092
+ },
+ "5d5e7d28a4b936645d161203": {
+  "pos": [
+   -0.00129,
+   0.04382,
+   -0.00807
+  ],
+  "rot": [
+   -0.094673,
+   -0.001622,
+   0.004749,
+   0.995496
+  ],
+  "scale": 1.0937,
+  "prefab": "assets/content/items/equipment/helmet_mich2001/item_equipment_helmet_mich2001_od.bundle",
+  "medianGap": 0.0073,
+  "insideShare": 0.038
+ },
+ "5d5e9c74a4b9364855191c40": {
+  "pos": [
+   -0.00046,
+   0.05213,
+   -0.0075
+  ],
+  "rot": [
+   -0.103791,
+   -0.000235,
+   0.005123,
+   0.994586
+  ],
+  "scale": 1.0798,
+  "prefab": "assets/content/items/equipment/helmet_mich2002/item_equipment_helmet_mich2002_od.bundle",
+  "medianGap": 0.0063,
+  "insideShare": 0.054
+ },
+ "5d6d3716a4b9361bc8618872": {
+  "pos": [
+   0.01233,
+   0.04392,
+   -0.00712
+  ],
+  "rot": [
+   -0.078639,
+   0.050541,
+   0.010835,
+   0.995562
+  ],
+  "scale": 1.0266,
+  "prefab": "assets/content/items/equipment/helmet_lshz2dtm/item_equipment_helmet_lshz2dtm.bundle",
+  "medianGap": 0.0072,
+  "insideShare": 0.033
+ },
+ "5e00c1ad86f774747333222c": {
+  "pos": [
+   -0.0045,
+   0.01929,
+   -0.00371
+  ],
+  "rot": [
+   -0.014994,
+   -0.006069,
+   0.020608,
+   0.999657
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_team_wendy_exfil/item_equipment_helmet_team_wendy_exfil_black.bundle",
+  "medianGap": 0.0074,
+  "insideShare": 0.049
+ },
+ "5e01ef6886f77445f643baa4": {
+  "pos": [
+   -0.0045,
+   0.01929,
+   -0.00371
+  ],
+  "rot": [
+   -0.014994,
+   -0.006069,
+   0.020608,
+   0.999657
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_team_wendy_exfil/item_equipment_helmet_team_wendy_exfil_coyote.bundle",
+  "medianGap": 0.0074,
+  "insideShare": 0.049
+ },
+ "5e4bfc1586f774264f7582d3": {
+  "pos": [
+   0.00073,
+   0.0489,
+   -0.00769
+  ],
+  "rot": [
+   -0.102838,
+   0.005551,
+   0.014185,
+   0.994581
+  ],
+  "scale": 1.0762,
+  "prefab": "assets/content/items/equipment/helmet_tc800/item_equipment_helmet_tc800.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.039
+ },
+ "5ea05cf85ad9772e6624305d": {
+  "pos": [
+   0.0058,
+   0.02333,
+   -0.01332
+  ],
+  "rot": [
+   0.000741,
+   0.025262,
+   -0.011947,
+   0.999609
+  ],
+  "scale": 1.0878,
+  "prefab": "assets/content/items/equipment/helmet_hops_core_fast/item_equipment_helmet_hops_core_fast.bundle",
+  "medianGap": 0.0088,
+  "insideShare": 0.057
+ },
+ "5ea17ca01412a1425304d1c0": {
+  "pos": [
+   0.00079,
+   -0.00338,
+   -0.01378
+  ],
+  "rot": [
+   -0.035092,
+   0.003817,
+   0.005114,
+   0.999364
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_diamond_age_bastion/item_equipment_helmet_diamond_age_bastion.bundle",
+  "medianGap": 0.0056,
+  "insideShare": 0.145
+ },
+ "5f60b34a41e30a4ab12a6947": {
+  "pos": [
+   0.01319,
+   0.03811,
+   -0.00841
+  ],
+  "rot": [
+   -0.073761,
+   0.048854,
+   0.051716,
+   0.994735
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_galvion_caiman/item_equipment_helmet_galvion_caiman.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.06
+ },
+ "61bca7cda0eae612383adf57": {
+  "pos": [
+   0.00152,
+   0.03828,
+   -0.01735
+  ],
+  "rot": [
+   -0.087276,
+   0.004228,
+   -0.010145,
+   0.996124
+  ],
+  "scale": 1.0448,
+  "prefab": "assets/content/items/equipment/helmet_nfm_hjelm/item_equipment_helmet_nfm_hjelm.bundle",
+  "medianGap": 0.0074,
+  "insideShare": 0.037
+ },
+ "65709d2d21b9f815e208ff95": {
+  "pos": [
+   -0.00119,
+   -0.00414,
+   -0.01317
+  ],
+  "rot": [
+   0.052631,
+   0.001396,
+   -0.025555,
+   0.998286
+  ],
+  "scale": 1.0199,
+  "prefab": "assets/content/items/equipment/helmet_neosteel/item_equipment_helmet_neosteel.bundle",
+  "medianGap": 0.0078,
+  "insideShare": 0.046
+ },
+ "65719f0775149d62ce0a670b": {
+  "pos": [
+   0.02143,
+   0.01686,
+   -0.00474
+  ],
+  "rot": [
+   -0.018382,
+   0.083361,
+   0.055197,
+   0.99482
+  ],
+  "scale": 1.0839,
+  "prefab": "assets/content/items/equipment/helmet_tor_2/item_equipment_helmet_tor_2.bundle",
+  "medianGap": 0.0081,
+  "insideShare": 0.054
+ },
+ "66b5f65ca7f72d197e70bcd6": {
+  "pos": [
+   0.00023,
+   0.01624,
+   -0.01237
+  ],
+  "rot": [
+   -0.059798,
+   0.001864,
+   0.010632,
+   0.998152
+  ],
+  "scale": 1.0482,
+  "prefab": "assets/content/items/equipment/helmet_bastion/item_equipment_helmet_bastion.bundle",
+  "medianGap": 0.0079,
+  "insideShare": 0.066
+ },
+ "66b5f661af44ca0014063c05": {
+  "pos": [
+   0.00023,
+   0.01624,
+   -0.01237
+  ],
+  "rot": [
+   -0.059798,
+   0.001864,
+   0.010632,
+   0.998152
+  ],
+  "scale": 1.0482,
+  "prefab": "assets/content/items/equipment/helmet_bastion/item_equipment_helmet_bastion_olive.bundle",
+  "medianGap": 0.0079,
+  "insideShare": 0.066
+ },
+ "66b5f666cad6f002ab7214c2": {
+  "pos": [
+   0.00023,
+   0.01624,
+   -0.01237
+  ],
+  "rot": [
+   -0.059798,
+   0.001864,
+   0.010632,
+   0.998152
+  ],
+  "scale": 1.0482,
+  "prefab": "assets/content/items/equipment/helmet_bastion/item_equipment_helmet_bastion_multicam.bundle",
+  "medianGap": 0.0079,
+  "insideShare": 0.066
+ },
+ "6745895717824b1ec20570a6": {
+  "pos": [
+   0.02899,
+   0.00518,
+   0.0012
+  ],
+  "rot": [
+   0.014924,
+   0.099627,
+   0.023397,
+   0.994638
+  ],
+  "scale": 1.0937,
+  "prefab": "assets/content/items/equipment/helmet_6b47covered/item_equipment_helmet_6b47covered_winter.bundle",
+  "medianGap": 0.006,
+  "insideShare": 0.357
+ },
+ "675956062f6ddfe8ff0e2806": {
+  "pos": [
+   -0.003,
+   0.03549,
+   -0.01739
+  ],
+  "rot": [
+   -0.087686,
+   -0.001188,
+   0.054698,
+   0.994645
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_flux/item_equipment_helmet_flux_multicam.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.05
+ },
+ "6759655674aa5e0825040d62": {
+  "pos": [
+   -0.003,
+   0.03549,
+   -0.01739
+  ],
+  "rot": [
+   -0.087686,
+   -0.001188,
+   0.054698,
+   0.994645
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_flux/item_equipment_helmet_flux.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.05
+ },
+ "67597ceea35600b4c10cea86": {
+  "pos": [
+   -0.00617,
+   0.04733,
+   -0.02182
+  ],
+  "rot": [
+   -0.093447,
+   -0.017826,
+   0.016037,
+   0.995335
+  ],
+  "scale": 1.0367,
+  "prefab": "assets/content/items/equipment/helmet_strike_ballistic/item_equipment_helmet_strike_ballistic_coyote.bundle",
+  "medianGap": 0.0077,
+  "insideShare": 0.036
+ },
+ "67597d241d5a44f2f605df06": {
+  "pos": [
+   -0.00617,
+   0.04733,
+   -0.02182
+  ],
+  "rot": [
+   -0.093447,
+   -0.017826,
+   0.016037,
+   0.995335
+  ],
+  "scale": 1.0367,
+  "prefab": "assets/content/items/equipment/helmet_strike_ballistic/item_equipment_helmet_strike_ballistic_coyote_camouflage.bundle",
+  "medianGap": 0.0077,
+  "insideShare": 0.036
+ },
+ "68a9a85c3e1ee5a70504c12e": {
+  "pos": [
+   0.00394,
+   -0.01809,
+   -0.0303
+  ],
+  "rot": [
+   0.091267,
+   0.030721,
+   -0.031963,
+   0.994839
+  ],
+  "scale": 1.0011,
+  "prefab": "assets/content/items/equipment/facecover_devtac/item_equipment_facecover_devtac_gen2_venom_bp2.bundle",
+  "medianGap": 0.0078,
+  "insideShare": 0.057
+ },
+ "68a9a92b838d65bcb3050176": {
+  "pos": [
+   0.00394,
+   -0.01809,
+   -0.0303
+  ],
+  "rot": [
+   0.091267,
+   0.030721,
+   -0.031963,
+   0.994839
+  ],
+  "scale": 1.0011,
+  "prefab": "assets/content/items/equipment/facecover_devtac/item_equipment_facecover_devtac_gen2_green_bp2.bundle",
+  "medianGap": 0.0078,
+  "insideShare": 0.057
+ },
+ "68a9b3ca0a9c4f9398032c46": {
+  "pos": [
+   0.01319,
+   0.03811,
+   -0.00841
+  ],
+  "rot": [
+   -0.073761,
+   0.048854,
+   0.051716,
+   0.994735
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_galvion_caiman/item_equipment_helmet_galvion_caiman_multicam_bp2.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.06
+ },
+ "68a9b5a5863d2a71fa0494a6": {
+  "pos": [
+   0.01319,
+   0.03811,
+   -0.00841
+  ],
+  "rot": [
+   -0.073761,
+   0.048854,
+   0.051716,
+   0.994735
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_galvion_caiman/item_equipment_helmet_galvion_caiman_venom_bp2.bundle",
+  "medianGap": 0.0076,
+  "insideShare": 0.06
+ },
+ "68a9be93f260f4e1c2038686": {
+  "pos": [
+   -0.00119,
+   -0.00414,
+   -0.01317
+  ],
+  "rot": [
+   0.052631,
+   0.001396,
+   -0.025555,
+   0.998286
+  ],
+  "scale": 1.0199,
+  "prefab": "assets/content/items/equipment/helmet_neosteel/item_equipment_helmet_neosteel_orange_stains_bp2.bundle",
+  "medianGap": 0.0078,
+  "insideShare": 0.046
+ },
+ "68a9beecbba00932ed0bc256": {
+  "pos": [
+   -0.00119,
+   -0.00414,
+   -0.01317
+  ],
+  "rot": [
+   0.052631,
+   0.001396,
+   -0.025555,
+   0.998286
+  ],
+  "scale": 1.0199,
+  "prefab": "assets/content/items/equipment/helmet_neosteel/item_equipment_helmet_neosteel_aces_bp2.bundle",
+  "medianGap": 0.0078,
+  "insideShare": 0.046
+ },
+ "68bee2ccd6da72c13f03db95": {
+  "pos": [
+   0.00189,
+   0.02788,
+   -0.02048
+  ],
+  "rot": [
+   -0.074512,
+   0.018177,
+   0.022673,
+   0.996797
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_ulach/item_equipment_helmet_ulach_bp2_coyote_stripes.bundle",
+  "medianGap": 0.0072,
+  "insideShare": 0.053
+ },
+ "68bee2d9af253218c00ebbb4": {
+  "pos": [
+   0.00288,
+   0.02438,
+   -0.0205
+  ],
+  "rot": [
+   -0.074512,
+   0.020719,
+   0.020376,
+   0.996797
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_ulach/item_equipment_helmet_ulach_bp2_green_dot.bundle",
+  "medianGap": 0.0072,
+  "insideShare": 0.053
+ },
+ "68bee2e0ede5c8489f08e1b5": {
+  "pos": [
+   0.00288,
+   0.02438,
+   -0.0205
+  ],
+  "rot": [
+   -0.074512,
+   0.020719,
+   0.020376,
+   0.996797
+  ],
+  "scale": 1.1,
+  "prefab": "assets/content/items/equipment/helmet_ulach/item_equipment_helmet_ulach_bp2_green_stripes.bundle",
+  "medianGap": 0.0072,
+  "insideShare": 0.053
+ }
+}

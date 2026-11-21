@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.1.4";
+    public const string Version = "0.1.8";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -160,6 +160,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     {
         bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
+        FpanoRailink.Update(EnvgFusion.Wearer, EnvgFusion.WornDevice);
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
         {
