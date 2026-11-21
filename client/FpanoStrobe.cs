@@ -55,6 +55,18 @@ internal static class FpanoGlow
             Graphics.DrawMesh(_quad, lens.localToWorldMatrix, _material, lens.gameObject.layer, null, 0, block, false, false, false);
     }
 
+    // an IR glow: seen only through night vision. K-3PS-C's eyepieces take it into their IR layer (the tubes' picture
+    // only); without them, drawn in the frame while the game's own night vision is on
+    internal static void DrawIr(Transform lens, MaterialPropertyBlock block)
+    {
+        if (_material == null || _quad == null)
+            return;
+        if (EyepieceLink.DrawIr(_quad, lens.localToWorldMatrix, _material, block))
+            return;
+        if (NightVisionOn())
+            Graphics.DrawMesh(_quad, lens.localToWorldMatrix, _material, lens.gameObject.layer, null, 0, block, false, false, false);
+    }
+
     // the game's night vision on (as IkLight shows the IR lights)
     internal static bool NightVisionOn()
     {
@@ -113,8 +125,8 @@ internal sealed class FpanoStrobe : MonoBehaviour
     // mode_001 IR dim, mode_002 IR bright, mode_003 visible dim, mode_004 visible bright
     private static readonly FpanoGlow.Look[] Looks =
     {
-        new FpanoGlow.Look { Ir = true, Colour = Color.white * 5f, Size = 0.15f, Shape = new Vector4(0.10f, 0.40f, 0.8f, 0.010f) },
-        new FpanoGlow.Look { Ir = true, Colour = Color.white * 14f, Size = 0.30f, Shape = new Vector4(0.10f, 0.45f, 1.2f, 0.010f) },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.4f, Size = 0.04f, Shape = new Vector4(0.15f, 0.35f, 0.5f, 0.015f) },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.8f, Size = 0.07f, Shape = new Vector4(0.15f, 0.40f, 0.7f, 0.015f) },
         // (the visible modes: no glow of this kind, the dome itself lit, below)
         new FpanoGlow.Look { Ir = false },
         new FpanoGlow.Look { Ir = false },
@@ -221,14 +233,14 @@ internal sealed class FpanoStrobe : MonoBehaviour
                 Graphics.DrawMesh(_domeMesh, at, _domeMaterial, layer, null, sub, _domeBlock, false, false, false);
             return;
         }
-        if (_block == null || _lens == null || !FpanoGlow.NightVisionOn())
+        if (_block == null || _lens == null)
             return;
         if (mode != _blockMode)
         {
             _blockMode = mode;
             FpanoGlow.Set(_block, Looks[mode]);
         }
-        FpanoGlow.Draw(_lens, _block);
+        FpanoGlow.DrawIr(_lens, _block);
     }
 }
 
@@ -242,8 +254,8 @@ internal sealed class FpanoLamp : MonoBehaviour
     // HL2-A: mode_001 IR low, 002 IR high, 003 white low, 004 white high
     private static readonly FpanoGlow.Look[] Hl2a =
     {
-        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.6f, Size = 0.012f, Shape = new Vector4(0.45f, 0.5f, 0f, 0f), Forward = 2f },
-        new FpanoGlow.Look { Ir = true, Colour = Color.white * 1.5f, Size = 0.014f, Shape = new Vector4(0.45f, 0.5f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.3f, Size = 0.012f, Shape = new Vector4(0.45f, 0.5f, 0f, 0f), Forward = 2f },
+        new FpanoGlow.Look { Ir = true, Colour = Color.white * 0.6f, Size = 0.014f, Shape = new Vector4(0.45f, 0.5f, 0f, 0f), Forward = 2f },
         new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 1.0f, Size = 0.012f, Shape = new Vector4(0.5f, 0.5f, 0f, 0f), Forward = 2f },
         new FpanoGlow.Look { Ir = false, Colour = new Color(1f, 0.97f, 0.9f) * 2.0f, Size = 0.015f, Shape = new Vector4(0.5f, 0.5f, 0f, 0f), Forward = 2f },
     };
@@ -285,13 +297,16 @@ internal sealed class FpanoLamp : MonoBehaviour
         if (_block == null || _lens == null)
             return;
         int mode = FpanoGlow.ActiveMode(_modes);
-        if (mode < 0 || _looks[mode].Ir && !FpanoGlow.NightVisionOn())
+        if (mode < 0)
             return;
         if (mode != _blockMode)
         {
             _blockMode = mode;
             FpanoGlow.Set(_block, _looks[mode]);
         }
-        FpanoGlow.Draw(_lens, _block);
+        if (_looks[mode].Ir)
+            FpanoGlow.DrawIr(_lens, _block);
+        else
+            FpanoGlow.Draw(_lens, _block);
     }
 }

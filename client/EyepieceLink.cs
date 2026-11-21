@@ -57,6 +57,12 @@ internal static class EyepieceLink
                 EnvgFusionPlugin.Log?.LogInfo("F-PANO: no K-3PS-C eyepieces (EyepieceFusion), the picture goes over the screen");
                 return;
             }
+            // (K-3PS-C 1.8.167: IR-only geometry handed to the eyepieces' IR layer, seen only through the tubes)
+            MethodInfo? drawIr = type.GetMethod("DrawIr", BindingFlags.Public | BindingFlags.Static, null,
+                new[] { typeof(Mesh), typeof(Matrix4x4), typeof(Material), typeof(MaterialPropertyBlock) }, null);
+            if (drawIr != null && drawIr.ReturnType == typeof(bool))
+                _drawIr = (Func<Mesh, Matrix4x4, Material, MaterialPropertyBlock, bool>)Delegate.CreateDelegate(typeof(Func<Mesh, Matrix4x4, Material, MaterialPropertyBlock, bool>), drawIr);
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO: " + (_drawIr != null ? "IR glows go through K-3PS-C's IR layer (DrawIr)" : "K-3PS-C has no DrawIr: IR glows drawn in the frame under the game's night vision"));
             FieldInfo? version = type.GetField("Version", BindingFlags.Public | BindingFlags.Static);
             int v = version != null ? (int)version.GetValue(null) : 0;
             MethodInfo? register = type.GetMethod("Register", BindingFlags.Public | BindingFlags.Static, null,
@@ -127,4 +133,14 @@ internal static class EyepieceLink
 
     internal static Vector4 FieldInMainUv => _field != null ? _field() : new Vector4(0.5f, 0.5f, 0.5f, 16f / 9f);
     internal static float Deployed => _deployed != null ? _deployed() : 1f;
+
+    // an IR-only draw handed to K-3PS-C (true: taken, drawn into its IR layer or rightly not at all; false: not taken)
+    private static Func<Mesh, Matrix4x4, Material, MaterialPropertyBlock, bool>? _drawIr;
+    internal static bool DrawIr(Mesh mesh, Matrix4x4 matrix, Material material, MaterialPropertyBlock block)
+    {
+        if (_drawIr == null)
+            return false;
+        try { return _drawIr(mesh, matrix, material, block); }
+        catch (Exception) { _drawIr = null; return false; }
+    }
 }
