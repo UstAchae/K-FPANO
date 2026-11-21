@@ -40,15 +40,15 @@ RZ = np.diag([-1.0, -1.0, 1.0, 1.0])
 WHITE, RED, GREEN, BLUE = [1, 1, 1, 1], [1, 0.12, 0.08, 1], [0.15, 1, 0.25, 1], [0.2, 0.35, 1, 1]
 LIGHT_ITEMS = {
     'hl2a': {'mesh': 'fpano_light_hl2a', 'turn': False, 'front': 'z', 'modes': [
-        dict(light='spot', lightColor=WHITE, intensity=1.3, range=55.0, angle=60.0),               # high
-        dict(light='spot', lightColor=WHITE, intensity=0.6, range=25.0, angle=60.0),               # low
-        dict(light='spot', lightColor=[1, 0, 0, 1], intensity=1.2, range=65.0, angle=40.0, ir=True)]},
+        # the user's list: IR low, IR high, white low, white high
+        dict(light='spot', lightColor=[1, 0, 0, 1], intensity=0.6, range=30.0, angle=50.0, ir=True),
+        dict(light='spot', lightColor=[1, 0, 0, 1], intensity=1.2, range=65.0, angle=50.0, ir=True),
+        dict(light='spot', lightColor=WHITE, intensity=0.6, range=25.0, angle=60.0),
+        dict(light='spot', lightColor=WHITE, intensity=1.3, range=55.0, angle=60.0)]},
     'mpls': {'mesh': 'fpano_light_mpls', 'turn': True, 'front': 'z', 'modes': [
-        dict(light='spot', lightColor=WHITE, intensity=0.5, range=12.0, angle=80.0),
+        # the user's list: red and white
         dict(light='spot', lightColor=RED, intensity=0.5, range=10.0, angle=80.0),
-        dict(light='spot', lightColor=GREEN, intensity=0.5, range=10.0, angle=80.0),
-        dict(light='spot', lightColor=BLUE, intensity=0.5, range=10.0, angle=80.0),
-        dict(light='spot', lightColor=[1, 0, 0, 1], intensity=0.8, range=25.0, angle=80.0, ir=True)]},
+        dict(light='spot', lightColor=WHITE, intensity=0.5, range=12.0, angle=80.0)]},
     'strobe': {'mesh': 'fpano_light_strobe_L', 'turn': False, 'front': 'out', 'modes': [
         dict(light='point', lightColor=WHITE, intensity=2.0, range=12.0, angle=0.0, strobe=True),
         dict(light='point', lightColor=[1, 0, 0, 1], intensity=2.0, range=25.0, angle=0.0, ir=True, strobe=True)]},
@@ -139,12 +139,14 @@ def split(out, info):
         env = UnityPy.load(str(WIN / path))
         t = next(o.read() for o in env.objects if o.type.name == 'Transform' and o.read().m_GameObject.read().m_Name == slot)
         q = t.m_LocalRotation; p = t.m_LocalPosition
-        # on rails with no helmet: as on the head under the FAST (the rails' own shape, fit about 1:1), the same place
-        # relative to the head as on a helmet; through its own helmet's scaled fit it hung below the rails (0.2.14)
-        fast_root = np.linalg.inv(helmet_slots(FAST)['mod_nvg_world'])
-        m = unscaled(Lgi @ fast_root @ helmet_slots(path)['__root_' + slot])
+        # on rails with no helmet: the rails take the shape they have on the headset's own helmet (that helmet's fit:
+        # railink_fit.json, group pose, scale and side offsets) and the headset sits as on that helmet, in the rails'
+        # ROOT frame (the F-PANO root frame on that helmet). On the FAST shape the EXFIL ComTacs' arms stood 3 cm off
+        # the rails each side (user, 0.2.15: "ComTac 耳机和 RALINK 应该相连的部分还是有空隙").
+        hs = helmet_slots(path); m = unscaled(np.linalg.inv(hs['mod_nvg_world']) @ hs['__root_' + slot])
         for i in ids: heads[i] = {'pos': [p.x, p.y, p.z], 'rot': [q.x, q.y, q.z, q.w], 'frame': 'helmet root',
-                                  'onRails': {'pos': [float(v) for v in m[:3, 3]], 'rot': mat2quat(m[:3, :3]).tolist(), 'frame': 'fpano_railink local'}}
+                                  'onRails': {'pos': [float(v) for v in m[:3, 3]], 'rot': mat2quat(m[:3, :3]).tolist(), 'frame': 'rails root',
+                                              'fit': tpl}}
     (ITEM / 'railink_headsets.json').write_text(json.dumps(heads, indent=1))
     rac = helmet_slots(FAST)['mod_equipment_001']
     heads['5a16b9fffcdbcb0176308b34'] = node('mod_equipment', 'fpano_railink', unscaled(Lgi @ rac))

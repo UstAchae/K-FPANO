@@ -113,17 +113,17 @@
    "weight": 0.1,
    "width": 1,
    "height": 1,
-   "modes": 3,
+   "modes": 4,
    "locales": {
     "en": [
      "SureFire HL2-A helmet light",
      "HL2-A",
-     "A SureFire helmet light for the Ops-Core RAILINK rails, powered by their Battery Pack+. Modes: white high, white low, infrared (seen only through night vision). Toggle and switch modes with the head light keys."
+     "A SureFire helmet light for the Ops-Core RAILINK rails, powered by their Battery Pack+. Modes: infrared low, infrared high (seen only through night vision), white low, white high. Toggle and switch modes with the head light keys."
     ],
     "ch": [
      "SureFire HL2-A 头盔灯",
      "HL2-A",
-     "装在 Ops-Core RAILINK 导轨上的 SureFire 头盔灯，由导轨的电池盒供电。模式：白光强光、白光弱光、红外（只有夜视仪能看到）。用头灯按键开关、切换模式。"
+     "装在 Ops-Core RAILINK 导轨上的 SureFire 头盔灯，由导轨的电池盒供电。模式：红外弱光、红外强光（只有夜视仪能看到）、白光弱光、白光强光。用头灯按键开关、切换模式。"
     ]
    }
   },
@@ -136,17 +136,17 @@
    "weight": 0.03,
    "width": 1,
    "height": 1,
-   "modes": 5,
+   "modes": 2,
    "locales": {
     "en": [
      "Princeton Tec MPLS helmet light",
      "MPLS",
-     "A small Princeton Tec Modular Personal Lighting System light for the Ops-Core RAILINK rails, for close work and marking. Modes: white, red, green, blue, infrared (seen only through night vision). Toggle and switch modes with the head light keys."
+     "A small Princeton Tec Modular Personal Lighting System light on a gooseneck, for the Ops-Core RAILINK rails, for close work. Modes: red, white. Toggle and switch modes with the head light keys."
     ],
     "ch": [
      "Princeton Tec MPLS 头盔灯",
      "MPLS",
-     "装在 Ops-Core RAILINK 导轨上的 Princeton Tec 模块化小灯，用于近距离照明和标识。模式：白光、红光、绿光、蓝光、红外（只有夜视仪能看到）。用头灯按键开关、切换模式。"
+     "装在 Ops-Core RAILINK 导轨上的 Princeton Tec 鹅颈小灯，用于近距离照明。模式：红光、白光。用头灯按键开关、切换模式。"
     ]
    }
   },

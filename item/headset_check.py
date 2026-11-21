@@ -55,15 +55,15 @@ for ids, tpl, path, slot in HEADSETS:
     for hid in ids:
         H = meshes(items[hid]['_props']['Prefab']['path'])
         on_helmet = tr(hroot_to_fp @ S[slot] @ G, H)
-        bare = heads[hid]['onRails']; bare_m = M(bare['pos'], bare['rot']) @ G
+        bare = heads[hid]['onRails']; bare_m = M(bare['pos'], bare['rot']) @ G   # rails root frame, rails at bare['fit']
         plates.append((hid, 'on ' + items[tpl]['_name'], rails_pts(fits[tpl]), on_helmet))
-        plates.append((hid, 'bare rails (now)', rails_pts(), tr(bare_m, H)))
+        plates.append((hid, 'bare rails (now)', rails_pts(fits[bare['fit']]), tr(bare_m, H)))
         if len(sys.argv) > 1:
             Sf = slots(FAST); f = fits['5a154d5cfcdbcb001a3b00da']
             new = np.linalg.inv(M(f['pos'], f['rot'], f['scale'][0])) @ np.linalg.inv(Sf['mod_nvg'] @ G) @ S[slot]
             new[:3, :3] /= np.cbrt(np.linalg.det(new[:3, :3]))
             plates.append((hid, 'bare rails (new)', rails_pts(), tr(new @ G, H)))
-W, PX = 300, 1000                                    # panel size, pixels per metre
+W, PX = 300, 1400                                    # panel size, pixels per metre
 img = Image.new('RGB', (2 * W, len(plates) * W), 'white'); d = ImageDraw.Draw(img)
 for i, (hid, what, R, H) in enumerate(plates):
     for j, (a, b, name, sgn) in enumerate(((0, 1, 'front x-y', 1), (2, 1, 'side z-y', 1))):
