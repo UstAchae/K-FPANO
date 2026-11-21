@@ -102,7 +102,7 @@ internal static class FpanoGlow
 
 // The CORE Survival HEL-STAR rail strobe on the RAILINK flashes as in the user's videos: every strobe together, from
 // one clock, 100 ms on in each 1.03 s (at least one frame a flash, however slow the frame). During the flash, and only
-// then, a glow is drawn (and the mode's light, if the prefab has one, is on) at the lens ("strobe_lens"): the clear dome lit white in the
+// then, the clear dome ("strobe_dome") is lit from inside in the
 // visible modes; in the IR modes the night-vision bloom with long star spikes, only while night vision is on. Dim modes
 // give a smaller, weaker flash. Found once, when the strobe's model is made; nothing searched or allocated per frame.
 internal sealed class FpanoStrobe : MonoBehaviour
@@ -115,11 +115,15 @@ internal sealed class FpanoStrobe : MonoBehaviour
     {
         new FpanoGlow.Look { Ir = true, Colour = Color.white * 5f, Size = 0.15f, Shape = new Vector4(0.10f, 0.40f, 0.8f, 0.010f) },
         new FpanoGlow.Look { Ir = true, Colour = Color.white * 14f, Size = 0.30f, Shape = new Vector4(0.10f, 0.45f, 1.2f, 0.010f) },
-        // the dome lit as a tritium dot is: its own size, no halo, faint (at night the eye's adaptation raises it a
-        // great deal: 0.85 was blinding in the user's night raid)
-        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.05f, Size = 0.006f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
-        new FpanoGlow.Look { Ir = false, Colour = Color.white * 0.12f, Size = 0.007f, Shape = new Vector4(0.6f, 0.01f, 0f, 0f) },
+        // (the visible modes: no glow of this kind, the dome itself lit, below)
+        new FpanoGlow.Look { Ir = false },
+        new FpanoGlow.Look { Ir = false },
     };
+    // the visible modes: the clear dome lit from inside, warm white (the user's daylight video), dim and bright
+    private static readonly Color[] DomeLight = { Color.clear, Color.clear, new Color(1f, 0.93f, 0.75f) * 0.25f, new Color(1f, 0.93f, 0.75f) * 0.6f };
+    private static Material? _domeMaterial;
+    private static bool _domeTried;
+    private static readonly int DomeColorId = Shader.PropertyToID("_Color");
 
     private Light[] _lights = new Light[0];
     private GameObject?[] _modes = new GameObject?[0];
@@ -128,6 +132,23 @@ internal sealed class FpanoStrobe : MonoBehaviour
     private MaterialPropertyBlock? _block;
     private int _blockMode = -1;
     private int _lastCycle = -1;
+    private Transform? _dome;
+    private Mesh? _domeMesh;
+    private MaterialPropertyBlock? _domeBlock;
+    private int _domeMode = -1;
+
+    private static Material? DomeMaterial()
+    {
+        if (_domeMaterial != null || _domeTried)
+            return _domeMaterial;
+        _domeTried = true;
+        Shader? shader = EnvgFusion.BundleShader("Justachae/FPANO/DomeLit");
+        if (shader == null || !shader.isSupported)
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: the dome shader is missing or unsupported: the visible strobe flashes nothing");
+        else
+            _domeMaterial = new Material(shader) { name = "Justachae F-PANO strobe dome lit", hideFlags = HideFlags.DontSave };
+        return _domeMaterial;
+    }
 
     internal static bool IsStrobe(EFT.InventoryLogic.Item? item)
     {
@@ -157,7 +178,12 @@ internal sealed class FpanoStrobe : MonoBehaviour
         strobe._lens = FpanoGlow.FindDeep(model.transform, "strobe_lens");
         if (strobe._lens != null && FpanoGlow.Ready())
             strobe._block = new MaterialPropertyBlock();
-        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: strobe " + model.name + ": " + strobe._lights.Length + " light(s), " + (strobe._block != null ? "a lens glow" : "no lens glow (no strobe_lens or no shader)"));
+        strobe._dome = FpanoGlow.FindDeep(model.transform, "strobe_dome");
+        strobe._domeMesh = strobe._dome != null ? strobe._dome.GetComponent<MeshFilter>()?.sharedMesh : null;
+        if (strobe._domeMesh != null && DomeMaterial() != null)
+            strobe._domeBlock = new MaterialPropertyBlock();
+        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: strobe " + model.name + ": " + strobe._lights.Length + " light(s), " + (strobe._block != null ? "an IR lens glow" : "no IR lens glow")
+            + ", " + (strobe._domeBlock != null ? "the dome lit (" + strobe._domeMesh!.name + ")" : "no dome (no strobe_dome mesh or no shader)"));
     }
 
     private void Update()
@@ -172,12 +198,30 @@ internal sealed class FpanoStrobe : MonoBehaviour
             if (light != null && light.enabled != on)
                 light.enabled = on;
         }
-        if (!on || _block == null || _lens == null)
+        if (!on)
             return;
         // the item's own state (on the head the game shows it on the model too; dropped, the model is left as it was,
         // but a strobe left on keeps flashing)
         int mode = _state != null ? (_state.IsActive ? Mathf.Clamp(_state.SelectedMode, 0, Looks.Length - 1) : -1) : FpanoGlow.ActiveMode(_modes);
-        if (mode < 0 || Looks[mode].Ir && !FpanoGlow.NightVisionOn())
+        if (mode < 0)
+            return;
+        if (!Looks[mode].Ir)
+        {
+            // visible: the dome itself lit for the flash
+            if (_domeBlock == null || _dome == null || _domeMesh == null || _domeMaterial == null)
+                return;
+            if (mode != _domeMode)
+            {
+                _domeMode = mode;
+                _domeBlock.SetColor(DomeColorId, DomeLight[mode]);
+            }
+            int layer = _dome.gameObject.layer;
+            Matrix4x4 at = _dome.localToWorldMatrix;
+            for (int sub = 0; sub < _domeMesh.subMeshCount; sub++)
+                Graphics.DrawMesh(_domeMesh, at, _domeMaterial, layer, null, sub, _domeBlock, false, false, false);
+            return;
+        }
+        if (_block == null || _lens == null || !FpanoGlow.NightVisionOn())
             return;
         if (mode != _blockMode)
         {

@@ -12,7 +12,7 @@ public static class BuildShaders
         var build = new AssetBundleBuild
         {
             assetBundleName = "fpanofusion.bundle",
-            assetNames = new[] { "Assets/Shaders/EnvgOutline.shader", "Assets/Shaders/EnvgWhitePhosphor.shader", "Assets/Shaders/EnvgBodyMask.shader", "Assets/Shaders/EnvgLensMask.shader", "Assets/Shaders/FpanoStrobeGlow.shader" },
+            assetNames = new[] { "Assets/Shaders/EnvgOutline.shader", "Assets/Shaders/EnvgWhitePhosphor.shader", "Assets/Shaders/EnvgBodyMask.shader", "Assets/Shaders/EnvgLensMask.shader", "Assets/Shaders/FpanoStrobeGlow.shader", "Assets/Shaders/FpanoDomeLit.shader" },
         };
         if (BuildPipeline.BuildAssetBundles(Out, new[] { build }, BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.StrictMode, BuildTarget.StandaloneWindows64) == null)
             throw new System.Exception("Build failed");
