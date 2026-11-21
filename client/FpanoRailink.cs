@@ -13,8 +13,9 @@ namespace EnvgFusion;
 //    keyed on the helmet's template), its sides and back from the fit's left/right/back;
 //  - the goggle's power cable (the goggle in the mount, the mount in the helmet's own mod_nvg) bound to the socket of
 //    the rails on the same helmet, whichever of them goes in last.
-// The mount goes into a helmet's mod_nvg only with the rails on that helmet, and the rails come off only with no mount
-// there (the user's rule: no F-PANO without the RAILINK).
+// The F-PANO goes into a rail helmet's own mod_nvg or the rails' mod_nvg (at the rails' root, set onto the helmet's
+// mod_nvg when the rails are on one), one F-PANO a helmet. Powered (its picture, the cable plugged in, the green light)
+// only with the RAILINK (its battery is part of the rails): on the rails, or on a helmet that has them.
 // A helmet with no node for mod_equipment_railink gets an empty one before its slots are attached (the game would skip
 // the slot and never make the rails). Only when a model is made; nothing per frame.
 internal static class FpanoRailink
@@ -379,42 +380,47 @@ internal static class FpanoRailink
     // the F-PANO (with its mount, one item) or the old separate mount: what needs the rails on its helmet
     internal static bool NeedsRails(EFT.InventoryLogic.Item? item) { string id = item != null ? item.TemplateId.ToString() : ""; return id == GoggleA || id == GoggleB || id == MountA || id == MountB; }
 
-    // ---- the rule: the F-PANO mount in a helmet's mod_nvg only with the RAILINK on that helmet ----
+    private static EFT.InventoryLogic.Slot? SlotNamed(EFT.InventoryLogic.Item? item, string id)
+    {
+        if (item is not EFT.InventoryLogic.CompoundItem compound || compound.Slots == null)
+            return null;
+        foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
+            if (slot != null && slot.ID == id)
+                return slot;
+        return null;
+    }
+    // that slot holds an F-PANO other than this item
+    private static bool HoldsOther(EFT.InventoryLogic.Slot? slot, EFT.InventoryLogic.Item item) =>
+        slot?.ContainedItem != null && !ReferenceEquals(slot.ContainedItem, item) && NeedsRails(slot.ContainedItem);
+
+    // ---- the rule: one F-PANO a helmet (its own mod_nvg or the rails' one, not both) ----
     private static void AfterCheckConditions(EFT.InventoryLogic.Slot __instance, EFT.InventoryLogic.Item item, bool ignoreRestrictions, ref Option<bool> __result)
     {
         try
         {
-            if (ignoreRestrictions || __result.Failed || item == null || __instance == null || __instance.ID != "mod_nvg" || !NeedsRails(item))
+            if (ignoreRestrictions || __result.Failed || item == null || __instance == null)
                 return;
-            if (RailsOn(__instance.ParentItem, out _) != null)
+            bool second = false;
+            if (__instance.ID == "mod_nvg" && NeedsRails(item))
+            {
+                EFT.InventoryLogic.Item? holder = __instance.ParentItem;
+                second = IsRails(holder)
+                    ? HoldsOther(SlotNamed(holder!.CurrentAddress?.Container?.ParentItem, "mod_nvg"), item)   // onto the rails: the helmet's own
+                    : HoldsOther(SlotNamed(RailsOn(holder, out _), "mod_nvg"), item);                      // onto the helmet: its rails'
+            }
+            else if (IsRails(item))
+            {
+                // rails carrying an F-PANO onto a helmet that has one
+                EFT.InventoryLogic.Item? carried = SlotNamed(item, "mod_nvg")?.ContainedItem;
+                second = carried != null && NeedsRails(carried) && HoldsOther(SlotNamed(__instance.ParentItem, "mod_nvg"), carried);
+            }
+            if (!second)
                 return;
             __result = new EFT.InventoryLogic.Slot.ItemFiltersWontAllowError(item, __instance);
-            if (_logged.Add("refused-mount"))
-                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: the F-PANO refused on a helmet with no RAILINK (the user's rule)");
+            if (_logged.Add("refused-second"))
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: a second F-PANO on one helmet refused");
         }
         catch (System.Exception) { }
-    }
-
-    // ... and the rails kept on while the mount is in that helmet's mod_nvg
-    private static bool BeforeRemoveFromSlot(EFT.InventoryLogic.Slot __instance, bool ignoreRestrictions, ref OperationResult<EFT.InventoryLogic.ContainerRemoveResult> __result)
-    {
-        try
-        {
-            if (ignoreRestrictions || __instance == null || !IsRails(__instance.ContainedItem))
-                return true;
-            if (__instance.ParentItem is not EFT.InventoryLogic.CompoundItem helmet || helmet.Slots == null)
-                return true;
-            foreach (EFT.InventoryLogic.Slot slot in helmet.Slots)
-                if (slot != null && slot.ID == "mod_nvg" && NeedsRails(slot.ContainedItem))
-                {
-                    __result = new EFT.InventoryLogic.Slot.SlotLockedError(__instance);
-                    if (_logged.Add("kept-rails"))
-                        EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: the rails kept on: the F-PANO is on the helmet (take it off first)");
-                    return false;
-                }
-        }
-        catch (System.Exception) { }
-        return true;
     }
 
     internal static void Patch(HarmonyLib.Harmony harmony)
@@ -435,9 +441,9 @@ internal static class FpanoRailink
         var check = HarmonyLib.AccessTools.Method(typeof(EFT.InventoryLogic.Slot), nameof(EFT.InventoryLogic.Slot.CheckConditions));
         if (check != null)
             try { harmony.Patch(check, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterCheckConditions))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: CheckConditions not hooked: " + e.Message); }
-        var take = HarmonyLib.AccessTools.Method(typeof(EFT.InventoryLogic.Slot), "RemoveItemInternal");
-        if (take != null)
-            try { harmony.Patch(take, prefix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(BeforeRemoveFromSlot))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: RemoveItemInternal not hooked: " + e.Message); }
+        var info = HarmonyLib.AccessTools.Method(typeof(EFT.UI.DragAndDrop.GridItemView), nameof(EFT.UI.DragAndDrop.GridItemView.UpdateInfo));
+        if (info != null)
+            try { harmony.Patch(info, postfix: new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterUpdateInfo))); patched++; } catch (System.Exception e) { EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: GridItemView.UpdateInfo not hooked: " + e.Message); }
         var post = new HarmonyLib.HarmonyMethod(typeof(FpanoRailink), nameof(AfterMade));
         foreach (string name in new[] { "CreateItem", "CreateLootPrefab", "CreateCleanLootPrefab" })
             foreach (var m in typeof(EFT.ObjectsFactory).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static))
@@ -586,7 +592,9 @@ internal static class FpanoRailink
     private static void FitRails(Transform rails, EFT.InventoryLogic.Item railsItem)
     {
         Transform? group = rails.Find("fpano_railink");
+        Transform? railsNvg = rails.Find("mod_nvg");
         if (group != null) Remember(group);
+        if (railsNvg != null) Remember(railsNvg);
         EFT.InventoryLogic.Item? helmet = railsItem.CurrentAddress?.Container?.ParentItem;
         string helmetId = helmet != null ? helmet.TemplateId.ToString() : "";
         Transform? helmetRoot = helmet != null ? HelmetRootOf(rails.parent) : null;
@@ -598,6 +606,9 @@ internal static class FpanoRailink
             known = Fits().TryGetValue(helmetId, out fit);
             if (!known)
                 fit = new Fit { Pos = Vector3.zero, Rot = Quaternion.identity, Scale = Vector3.one };
+            // an F-PANO on the rails where one in the helmet's own mod_nvg would be
+            if (railsNvg != null)
+                railsNvg.SetPositionAndRotation(helmetNvg.position, helmetNvg.rotation);
             if (group != null)
             {
                 group.SetPositionAndRotation(helmetNvg.TransformPoint(SlotTurn * fit.Pos), helmetNvg.rotation * SlotTurn * fit.Rot);
@@ -608,6 +619,7 @@ internal static class FpanoRailink
         else
         {
             if (group != null) Restore(group);
+            if (railsNvg != null) Restore(railsNvg);
         }
         if (group != null)
         {
@@ -641,7 +653,7 @@ internal static class FpanoRailink
         // the helmet's own rails off
         if (helmetRoot != null && helmet != null && helmetNvg != null)
             Rail(helmetRoot, ShapeOf(helmet), rails);
-        int cables = helmetRoot != null ? BindCables(helmetRoot, rails) : 0;
+        int cables = BindCables(helmetNvg != null && helmetRoot != null ? helmetRoot : rails, rails);
         string key = (helmetNvg != null ? helmetId : "-") + "/" + rails.name + "/" + cables;
         if (_logged.Add(key))
             EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: " + rails.name + (helmetNvg == null ? " on no helmet: as the prefab has it" : " on helmet " + helmetId + ", " + (known ? "fitted" : "no fit for it: at its mod_nvg as the prefab has it"))
@@ -709,40 +721,71 @@ internal static class FpanoRailink
         return n;
     }
 
-    // ---- the battery: the rails on the helmet holding the worn goggle's mount, their battery slot empty ----
-    private static EFT.InventoryLogic.Item? _seenRails, _seenHelmet;
-    private static EFT.InventoryLogic.Slot? _battery, _railsSlot;
-    private static bool _seenAny, _wasUnpowered;
+    // ---- the power: the RAILINK's battery is part of the rails ----
+    // The F-PANO is powered on the rails' own mod_nvg, or in a helmet that has the rails on (or, as owned from 0.2.9, in
+    // the old separate mount on such a helmet).
+    internal static bool PoweredAt(EFT.InventoryLogic.Item? goggle)
+    {
+        EFT.InventoryLogic.Item? holder = goggle?.CurrentAddress?.Container?.ParentItem;
+        if (IsMount(holder))
+            holder = holder!.CurrentAddress?.Container?.ParentItem;
+        return holder != null && (IsRails(holder) || RailsOn(holder, out _) != null);
+    }
+
+    // the icon's toggle light: on only when powered (the game shows the toggle's own state)
+    private static void AfterUpdateInfo(EFT.UI.DragAndDrop.GridItemView __instance)
+    {
+        try
+        {
+            var item = __instance?.Item;
+            if (item == null || Kind(item) != 3 || __instance!._togglableIcon == null || !__instance._togglableIcon.gameObject.activeSelf)
+                return;
+            if (!PoweredAt(item))
+                __instance._togglableIcon.sprite = EFTHardSettings.Instance.StaticIcons.TogglableOff;
+        }
+        catch (System.Exception) { }
+    }
+
+    // the worn goggle, once a frame: the holder's slots compared by reference (nothing allocated); looked at again only
+    // when the holder or what its slots hold changes
+    private static EFT.InventoryLogic.Item? _seenGoggle, _seenHolder;
+    private static EFT.InventoryLogic.Item?[] _seenContents = new EFT.InventoryLogic.Item?[0];
+    private static bool _seenAny, _wasUnpowered, _off;
     internal static bool Unpowered(EFT.InventoryLogic.Item? goggle)
     {
-        // the F-PANO in the helmet's mod_nvg (or, as owned from 0.2.9, in the old separate mount there)
-        EFT.InventoryLogic.Item? helmet = goggle?.CurrentAddress?.Container?.ParentItem;
-        if (IsMount(helmet))
-            helmet = helmet!.CurrentAddress?.Container?.ParentItem;
-        // (the rails looked for again only when the helmet changes or its rails slot no longer holds them)
-        EFT.InventoryLogic.Item? rails = _seenRails;
-        if (!ReferenceEquals(helmet, _seenHelmet) || _railsSlot == null || !ReferenceEquals(_railsSlot.ContainedItem, _seenRails))
+        EFT.InventoryLogic.Item? holder = goggle?.CurrentAddress?.Container?.ParentItem;
+        bool changed = !_seenAny || !ReferenceEquals(goggle, _seenGoggle) || !ReferenceEquals(holder, _seenHolder);
+        var slots = (holder as EFT.InventoryLogic.CompoundItem)?.Slots;
+        if (!changed && slots != null)
         {
-            _seenHelmet = helmet;
-            rails = RailsOn(helmet, out _railsSlot);
+            int k = 0;
+            foreach (EFT.InventoryLogic.Slot slot in slots)
+            {
+                if (k >= _seenContents.Length || !ReferenceEquals(slot?.ContainedItem, _seenContents[k])) { changed = true; break; }
+                k++;
+            }
+            if (k != _seenContents.Length)
+                changed = true;
         }
-        if (!_seenAny || !ReferenceEquals(rails, _seenRails))
+        if (changed)
         {
             _seenAny = true;
-            _seenRails = rails;
-            _battery = null;
-            if (rails is EFT.InventoryLogic.CompoundItem compound && IsRails(rails) && compound.Slots != null)
-                foreach (EFT.InventoryLogic.Slot slot in compound.Slots)
-                    if (slot != null && string.Equals(slot.ID, "mod_battery", System.StringComparison.OrdinalIgnoreCase))
-                        _battery = slot;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO: " + (_battery != null ? "powered from the RAILINK's battery slot" : "no RAILINK on the goggle's helmet: always powered"));
+            _seenGoggle = goggle;
+            _seenHolder = holder;
+            var contents = new List<EFT.InventoryLogic.Item?>();
+            if (slots != null)
+                foreach (EFT.InventoryLogic.Slot slot in slots)
+                    contents.Add(slot?.ContainedItem);
+            _seenContents = contents.ToArray();
+            _off = !PoweredAt(goggle);
         }
-        bool off = _battery != null && _battery.ContainedItem == null;
-        if (off != _wasUnpowered)
+        if (_off != _wasUnpowered || changed && !_loggedPower)
         {
-            _wasUnpowered = off;
-            EnvgFusionPlugin.Log?.LogInfo(off ? "F-PANO: no battery in the RAILINK: the goggle goes down dark" : "F-PANO: battery in: powered");
+            _loggedPower = true;
+            _wasUnpowered = _off;
+            EnvgFusionPlugin.Log?.LogInfo(_off ? "F-PANO: no RAILINK on it or its helmet: the goggle goes down dark" : "F-PANO: on the RAILINK: powered");
         }
-        return off;
+        return _off;
     }
+    private static bool _loggedPower;
 }

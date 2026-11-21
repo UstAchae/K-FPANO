@@ -9,12 +9,12 @@ using UnityEngine;
 
 namespace EnvgFusion;
 
-// The rails' battery slot ("mod_battery") and the helmets' new rails slot ("mod_equipment_railink") are slots the game
-// has no picture for: ModSlotView.Show finds no "Slots/<name>" sprite and leaves the slot's back white. Our own
-// silhouettes (item/ui/slot_<name>.png, built into this DLL) are put there instead, once Show has run. Made once, kept.
+// The helmets' new rails slot ("mod_equipment_railink") is a slot the game has no picture for: ModSlotView.Show finds
+// no "Slots/<name>" sprite and leaves the slot's back white. Our own silhouette (item/ui/slot_<name>.png, built into
+// this DLL) is put there instead, once Show has run. Made once, kept.
 internal static class FpanoSlotIcons
 {
-    private static readonly string[] Names = { "mod_battery", "mod_equipment_railink" };
+    private static readonly string[] Names = { "mod_equipment_railink" };
     private static readonly Dictionary<string, Sprite?> _sprites = new Dictionary<string, Sprite?>();
 
     internal static void Patch(Harmony harmony)
@@ -24,12 +24,12 @@ internal static class FpanoSlotIcons
         if (show != null)
             harmony.Patch(show, postfix: new HarmonyMethod(typeof(FpanoSlotIcons), nameof(AfterShow)));
         else
-            EnvgFusionPlugin.Log?.LogWarning("F-PANO: ModSlotView.Show not found; the battery and rails slots keep the game's blank picture");
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO: ModSlotView.Show not found; the rails slot keeps the game's blank picture");
     }
 
     private static void AfterShow(ModSlotView __instance, Slot slot)
     {
-        if (slot == null || (slot.Name != Names[0] && slot.Name != Names[1]))
+        if (slot == null || slot.Name != Names[0])
             return;
         Sprite? sprite = SpriteFor(slot.Name);
         if (sprite != null)
