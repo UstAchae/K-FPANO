@@ -124,6 +124,13 @@ internal static class FpanoRailink
                             continue;
                         float squeeze = (float?)helmet.Value["scaleX"] ?? 1f;
                         _perHelmet[entry.Name + "/" + helmet.Name] = new Pose { P = Vec(hp), R = new Quaternion((float)hr[0]!, (float)hr[1]!, (float)hr[2]!, (float)hr[3]!), S = new Vector3(squeeze, 1f, 1f) };
+                        var axis = helmet.Value["bendAxis"];
+                        if (axis != null && helmet.Value["top"] != null && helmet.Value["clip"] != null)
+                            _bends[entry.Name + "/" + helmet.Name] = new Bend
+                            {
+                                Axis = Vec(axis), Top = (float)helmet.Value["top"]!, Clip = (float)helmet.Value["clip"]!,
+                                NegX = (float?)helmet.Value["bendNegX"] ?? 0f, PosX = (float?)helmet.Value["bendPosX"] ?? 0f,
+                            };
                     }
             }
         }
@@ -142,8 +149,13 @@ internal static class FpanoRailink
         Remember(node);
         string id = headset != null ? headset.TemplateId.ToString() : "";
         bool placed = false;
-        if (helmetRoot != null && id.Length > 0 && Headsets() != null && node.parent != null
-            && (_perHelmet.TryGetValue(id + "/" + helmetId, out Pose g) || _onGroup.TryGetValue(id, out g)))
+        // the entry for this helmet (bare rails: the headset's own helmet, whose fit the rails then have)
+        string fitOn = helmetRoot != null ? helmetId : (id.Length > 0 && Headsets() != null && _onRailsFit.TryGetValue(id, out string own0) ? own0 : "");
+        string bendKey = "";
+        if (id.Length > 0 && Headsets() != null && node.parent != null && fitOn.Length > 0 && _perHelmet.ContainsKey(id + "/" + fitOn))
+            bendKey = id + "/" + fitOn;
+        if (id.Length > 0 && Headsets() != null && node.parent != null
+            && (bendKey.Length > 0 && _perHelmet.TryGetValue(bendKey, out Pose g) || helmetRoot != null && _onGroup.TryGetValue(id, out g)))
         {
             // with the rails (their place on this helmet: its own fit where the table has one), at the rails' own size
             // taken off so the headset keeps its own, squeezed sideways where the rails sit narrower (g.S.x)
@@ -171,8 +183,104 @@ internal static class FpanoRailink
         }
         else
             Restore(node);
-        if (helmetRoot != null && id.Length > 0 && _logged.Add("headset/" + id))
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: headset " + id + " on the rails, " + (placed ? "at its own place on the helmet" : "not in the table: at the prefab's place"));
+        BendArms(node, placed ? bendKey : "");
+        if (id.Length > 0 && _logged.Add("headset/" + id + "/" + fitOn))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: headset " + id + " on the rails" + (helmetRoot != null ? " on helmet " : " (bare, as on ") + fitOn + (helmetRoot != null ? "" : ")") + ", "
+                + (placed ? "at its own place" + (_bends.ContainsKey(bendKey) ? ", arms bent to the rails" : "") : "not in the table: at the prefab's place"));
+    }
+
+    // ---- a headset's arms bent onto the rails (the band between its top and the clips; above, nothing; below, each side
+    // moved whole): a copy of each of its meshes, made once per mesh and helmet, the original put back when it leaves ----
+    private struct Bend { public Vector3 Axis; public float Top, Clip, NegX, PosX; }
+    private static readonly Dictionary<string, Bend> _bends = new Dictionary<string, Bend>();
+    private const string BentSuffix = " (RAILINK arms bent)";
+    private static readonly Dictionary<int, Mesh> _unbent = new Dictionary<int, Mesh>();          // a filter -> its own mesh
+    private static readonly Dictionary<string, Mesh?> _bentCopies = new Dictionary<string, Mesh?>();
+    private static readonly List<MeshFilter> _headsetFilters = new List<MeshFilter>();
+
+    // the headset's model under its slot node: bent for that key ("" = as it is)
+    private static void BendArms(Transform slot, string key)
+    {
+        _bends.TryGetValue(key, out Bend bend);
+        bool bent = key.Length > 0 && _bends.ContainsKey(key);
+        for (int c = 0; c < slot.childCount; c++)
+        {
+            Transform root = slot.GetChild(c);
+            root.GetComponentsInChildren(true, _headsetFilters);
+            foreach (MeshFilter mf in _headsetFilters)
+            {
+                Mesh? shown = mf.sharedMesh;
+                if (shown == null)
+                    continue;
+                int fid = mf.GetInstanceID();
+                if (!shown.name.EndsWith(BentSuffix, System.StringComparison.Ordinal))
+                    _unbent[fid] = shown;
+                if (!_unbent.TryGetValue(fid, out Mesh original) || original == null)
+                    continue;
+                Mesh? want = bent ? BentCopy(original, key, bend, root.worldToLocalMatrix * mf.transform.localToWorldMatrix) : original;
+                if (want != null && mf.sharedMesh != want)
+                    mf.sharedMesh = want;
+            }
+            _headsetFilters.Clear();
+        }
+    }
+
+    // a headset model leaving the rails (or made anew): its own meshes back
+    internal static void Unbend(Transform root)
+    {
+        if (_unbent.Count == 0)
+            return;
+        root.GetComponentsInChildren(true, _headsetFilters);
+        foreach (MeshFilter mf in _headsetFilters)
+            if (mf.sharedMesh != null && mf.sharedMesh.name.EndsWith(BentSuffix, System.StringComparison.Ordinal) && _unbent.TryGetValue(mf.GetInstanceID(), out Mesh original) && original != null)
+                mf.sharedMesh = original;
+        _headsetFilters.Clear();
+    }
+
+    private static Mesh? BentCopy(Mesh original, string key, Bend bend, Matrix4x4 meshToRoot)
+    {
+        string cacheKey = original.GetInstanceID() + "/" + key;
+        if (_bentCopies.TryGetValue(cacheKey, out Mesh? made))
+            return made;
+        Mesh? copy = null;
+        try
+        {
+            if (!original.isReadable)
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: headset mesh " + original.name + " is not readable: its arms left as they are");
+            else
+            {
+                Matrix4x4 rootToMesh = meshToRoot.inverse;
+                Vector3[] v = original.vertices;
+                float span = Mathf.Max(bend.Top - bend.Clip, 1e-5f);
+                float most = 0f;
+                for (int i = 0; i < v.Length; i++)
+                {
+                    Vector3 r = meshToRoot.MultiplyPoint3x4(v[i]);
+                    float h = Vector3.Dot(r, bend.Axis);
+                    float t = Mathf.Clamp01((bend.Top - h) / span);
+                    float w = t * t * (3f - 2f * t);
+                    float dx = (r.x < 0f ? bend.NegX : bend.PosX) * w;
+                    if (dx == 0f)
+                        continue;
+                    r.x += dx;
+                    v[i] = rootToMesh.MultiplyPoint3x4(r);
+                    most = Mathf.Max(most, Mathf.Abs(dx));
+                }
+                copy = Object.Instantiate(original);
+                copy.name = original.name + BentSuffix;
+                copy.vertices = v;
+                copy.RecalculateBounds();
+                copy.UploadMeshData(true);
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO RAILINK: " + original.name + " arms bent for " + key + " (up to " + (most * 1000f).ToString("F1") + " mm)");
+            }
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO RAILINK: bending " + original.name + " failed: " + e.Message);
+            copy = null;
+        }
+        _bentCopies[cacheKey] = copy;
+        return copy;
     }
 
     // ---- the helmet's own rails, taken off while the RAILINK is on (item/railink_hide.json, by the helmet's shape) ----
@@ -552,6 +660,8 @@ internal static class FpanoRailink
                     if (railsRoot != null)
                         FitRails(railsRoot, into.ParentItem);
                 }
+                else if (_unbent.Count > 0 && Headsets().ContainsKey(item.TemplateId.ToString()))
+                    Unbend(itemView.transform);
                 return;
             }
             if (kind == 1)
@@ -592,6 +702,8 @@ internal static class FpanoRailink
                 FitRails(__result.transform, __0);
             else if (kind != 0)
                 Cables(__result.transform, null);
+            else if (_unbent.Count > 0 && Headsets().ContainsKey(__0.TemplateId.ToString()))
+                Unbend(__result.transform);
         }
         catch (System.Exception) { }
     }
