@@ -16,7 +16,7 @@ public static class FpanoBuilder {
  const string Src="Assets/Source",Gen="Assets/Generated";
  static readonly string Out=Path.GetFullPath(Path.Combine(Application.dataPath,"../../built"));
  public const string DeviceNode="nvg_fpano_LOD0",ThermalLens="fpano_thermal_lens";
- [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;}
+ [Serializable] public class Node {public string name,parent,mesh,mat;public float[] pos,rot;public bool skin;public string[] bones;public float[] weightCentre;public float weightNear,weightFar;}
  [Serializable] public class Info {public string colour;public string[] atlases;public float[] thermalLens,onRotation,offRotation;public Node[] nodes;}
 
  const float RotationSpeed=0.75187969f;  // the GPNVG-18's
@@ -90,7 +90,22 @@ public static class FpanoBuilder {
   foreach(var n in info.nodes){
    var go=new GameObject(n.name);go.transform.SetParent(n.parent==""?root.transform:made[n.parent],false);
    go.transform.localPosition=V(n.pos);go.transform.localRotation=Q(n.rot);made[n.name]=go.transform;
-   if(n.mesh!=""){
+   if(n.skin){
+    // The power cable: skinned to its bones (prefab.py POWER_*), the second bone's weight 1 within weightNear of
+    // weightCentre, 0 past weightFar, smooth between; the mesh is in the root frame, as the bones' bind poses.
+    var mesh=ReadMesh(src+"/"+n.mesh+".bin",n.mesh,gen);
+    var c=V(n.weightCentre);var bw=new BoneWeight[mesh.vertexCount];var vs=mesh.vertices;
+    for(int i=0;i<vs.Length;i++){float t=Mathf.Clamp01((n.weightFar-Vector3.Distance(vs[i],c))/(n.weightFar-n.weightNear));t=t*t*(3-2*t);
+     bw[i]=new BoneWeight{boneIndex0=1,weight0=t,boneIndex1=0,weight1=1-t};}
+    var bones=n.bones.Select(b=>made[b]).ToArray();
+    mesh.boneWeights=bw;mesh.bindposes=bones.Select(b=>b.worldToLocalMatrix*go.transform.localToWorldMatrix).ToArray();
+    EditorUtility.SetDirty(mesh);
+    var sr=go.AddComponent<SkinnedMeshRenderer>();sr.sharedMesh=mesh;sr.bones=bones;sr.rootBone=bones[1];sr.sharedMaterial=mats[n.mat];
+    sr.shadowCastingMode=ShadowCastingMode.On;sr.receiveShadows=true;sr.updateWhenOffscreen=false;sr.quality=SkinQuality.Bone2;
+    sr.localBounds=new Bounds(bones[1].InverseTransformPoint(go.transform.TransformPoint(mesh.bounds.center)),mesh.bounds.size+Vector3.one*0.3f);
+    renderers.Add(sr);
+   }
+   else if(n.mesh!=""){
     var mesh=ReadMesh(src+"/"+n.mesh+".bin",n.mesh,gen);
     go.AddComponent<MeshFilter>().sharedMesh=mesh;
     var r=go.AddComponent<MeshRenderer>();r.sharedMaterial=mats[n.mat];r.shadowCastingMode=n.mat=="glass"?ShadowCastingMode.Off:ShadowCastingMode.On;r.receiveShadows=true;renderers.Add(r);

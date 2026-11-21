@@ -137,6 +137,52 @@
    "mat": "body"
   },
   {
+   "name": "fpano_power_socket",
+   "parent": "",
+   "pos": [
+    -0.08390007100591716,
+    -0.03526919092207279,
+    -0.022504501628583425
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "",
+   "mat": ""
+  },
+  {
+   "name": "fpano_power_cable",
+   "parent": "",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "mesh": "fpano_power_cable",
+   "mat": "body",
+   "skin": true,
+   "bones": [
+    "nvg_fpano_LOD0",
+    "fpano_power_socket"
+   ],
+   "weightCentre": [
+    -0.08390007100591716,
+    -0.03526919092207279,
+    -0.022504501628583425
+   ],
+   "weightNear": 0.025,
+   "weightFar": 0.075
+  },
+  {
    "name": "fpano_railink_rails",
    "parent": "",
    "pos": [

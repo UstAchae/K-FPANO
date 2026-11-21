@@ -26,7 +26,8 @@ UNITY = ITEM / 'Unity/Assets/Source'
 COLOURS = {'fde': '', 'blk': '.001'}  # our colour key -> the model's object name suffix
 PART = 'NVG_L3_Harris_FPGPNVG'
 MPART = 'NVG_Mount_L3Harris_FPGPNVG'
-BODY = [PART, PART + '_Bridge', PART + '_Cable']          # the goggle's atlas (FPGPNVG)
+BODY = [PART, PART + '_Bridge']                            # the goggle's atlas (FPGPNVG)
+CABLE = PART + '_Cable'                                     # its power cable, its own skinned node (POWER_*)
 BASE = [MPART + '_Base']                                    # stays on the helmet (FPG21 atlas)
 FRAME = [MPART + 'Frame']                                   # flips on the Base (FPG21 atlas)
 ARM = [MPART + '_Mount_Main']                               # tilts on the Frame's front boss (FPG21 atlas)
@@ -76,6 +77,10 @@ LENS_DARK_UV = (0.16, 0.64)  # a dark grey texel of the model's own pane paint
 # items in one scene, so the RAILINK parts are placed exactly as the F-PANO's own (to_device with the FDE copy's
 # frame, then the same seat): checked on the helmet, the battery sits on its back and the rails along its sides.
 # They hang on our root and do not flip. The headlamp, light and strobes of the set are left out.
+POWER_PLUG_MODEL = (0.0810, -0.1222, 1.7574)    # the cable plug's centre (its axis (0.55, 0.83, -0.10)), model frame
+POWER_SOCKET_MODEL = (0.0848, -0.1222, 1.7475)  # the left rail's front socket, on the plug's height along y
+POWER_PLUG, POWER_BEND = 0.017, 0.028           # the plug moved whole; the cable bending to it beyond
+POWER_NEAR, POWER_FAR = 0.025, 0.075            # skin weights: the socket's bone near it, the goggle's far from it
 RAILINK_TEX = Path(r'D:/games/models/RAILINK/extracted/Helmet_OpsCore_RAILINK_v02/Textures/PBR_Helmet_OpsCore_RAILINK_SHSF_tx')
 RAILINK = {'rails': ('Helmet_OpsCore_RAILINK_SHSF_Rail', 0), 'inside': ('Helmet_OpsCore_RAILINK_SHSF_Rail', 1),
            'battery': ('Helmet_OpsCore_RAILINK_SHSF_Battery', 0)}  # atlas: (part, material slot)
@@ -227,6 +232,23 @@ def rig(parts, colour, out):
             p, n = seated(p), n @ Rdev.T                       # root frame
             write_mesh(out / f'{name}.bin', (p - t) @ R, n @ R, u); node['mesh'] = name; node['mat'] = mat
         nodes.append(node)
+    # The goggle's power cable, plugged into the left rail's front socket (user: "直接插进去"). In the 3DMA scene its plug
+    # hangs 1 cm over the socket: the plug (within POWER_PLUG of its centre) is moved onto the socket's axis, the cable
+    # bending down to it over the next POWER_BEND. The cable is skinned to two bones, the goggle's device node and a
+    # socket node on the root: within POWER_NEAR of the socket it stays in the socket, past POWER_FAR it follows the
+    # goggle, between it blends, so it stays plugged in as the goggle flips and is adjusted.
+    plug_c, sock_c = to_device(colour, np.array([POWER_PLUG_MODEL, POWER_SOCKET_MODEL]) + [COLOUR_SHIFT[colour], 0, 0])
+    shift = sock_c - plug_c; shift[1] = 0.0                    # across the plug's axis only (the axis runs along y)
+    p, n, u = load(parts, colour, [CABLE])
+    d = np.linalg.norm(p - plug_c, axis=1)
+    f = np.clip((POWER_PLUG + POWER_BEND - d) / POWER_BEND, 0, 1); f = f * f * (3 - 2 * f)
+    p = p + f[:, None] * shift
+    sock = seated(sock_c[None])[0]
+    nodes.append({'name': 'fpano_power_socket', 'parent': '', 'pos': sock.tolist(), 'rot': [0, 0, 0, 1], 'mesh': '', 'mat': ''})
+    write_mesh(out / 'fpano_power_cable.bin', seated(p), n @ Rdev.T, u)
+    nodes.append({'name': 'fpano_power_cable', 'parent': '', 'pos': [0, 0, 0], 'rot': [0, 0, 0, 1], 'mesh': 'fpano_power_cable', 'mat': 'body',
+                  'skin': True, 'bones': ['nvg_fpano_LOD0', 'fpano_power_socket'], 'weightCentre': sock.tolist(),
+                  'weightNear': POWER_NEAR, 'weightFar': POWER_FAR})
     # The RAILINK rails and battery, on the root (see RAILINK), in the root frame.
     for atlas, (part, slot) in RAILINK.items():
         d = np.load(parts.parent / 'railink' / f'{part}.npz')
