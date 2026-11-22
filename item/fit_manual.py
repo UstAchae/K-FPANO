@@ -7,12 +7,12 @@
 # one entry per helmet template id; scale may be a 3-vector) and, with --render, a side and a top view per shape
 # into item/fit_renders/manual_*.png and one contact sheet.
 # Run: python item/fit_manual.py [--render] [shape ...]
-import json, sys, subprocess
+import json, os, sys, subprocess
 from pathlib import Path
 import numpy as np
 from fit_helmets import helmets, prefab, read_bin, qmat, mat2quat, TRIS, SRC, RAILINK_NODES, ITEM
 
-BLENDER = r'C:/Users/LeeCh/tools/blender/blender.exe'
+BLENDER = os.environ.get('BLENDER', 'blender')   # Blender 4+ (set BLENDER to its full path if it is not on PATH)
 OUT = ITEM / 'fit_renders'
 MANUAL = ITEM / 'railink_manual.json'
 DEFAULT = {'ty': 0.0, 'tz': 0.0, 'pitch': 0.0, 's': 1.0, 'sx': 1.0, 'dxL': 0.0, 'dxR': 0.0, 'dzBack': 0.0}

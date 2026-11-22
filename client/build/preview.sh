@@ -1,7 +1,7 @@
 #!/bin/bash
 # preview.sh <dump-dir> <out-name> [set]: the chain rerun offline on a buffer dump, outputs in the scratchpad
 C="$(cd "$(dirname "$0")/.." && pwd)"
-S=/c/Users/LeeCh/AppData/Local/Temp/claude/1b8f5aa763d6006b/3a37a105-6aef-4e65-b6f6-2215a0ae1fce/scratchpad
+S="${PREVIEW_OUT:-$C/build/out/preview}"   # where the previews go (set PREVIEW_OUT to put them elsewhere)
 cp "$C/EnvgChain.cs" "$C/Unity/Assets/Editor/EnvgChain.cs"
 O="$(cygpath -w $S/prev/$2)"
 mkdir -p "$S/prev/$2" "$C/build/out"
