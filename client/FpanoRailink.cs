@@ -816,6 +816,8 @@ internal static class FpanoRailink
                     Unbend(itemView.transform);
                 return;
             }
+            if (kind == 1 || kind == 3)
+                NoteLens(itemView.transform);
             if (kind == 1)
             {
                 FitRails(itemView.transform, item);
@@ -1033,6 +1035,8 @@ internal static class FpanoRailink
             else if (FpanoLamp.IsLamp(__0))
                 FpanoLamp.Attach(__result, __0);
             int kind = Kind(__0);
+            if (kind == 1 || kind == 3)
+                NoteLens(__result.transform);
             if (kind == 1)
             {
                 FitRails(__result.transform, __0);
@@ -1044,6 +1048,15 @@ internal static class FpanoRailink
                 Unbend(__result.transform);
         }
         catch (System.Exception) { }
+    }
+
+    // the thermal objective's marker of every F-PANO model made or placed (the worn one is the one at the eye)
+    internal static readonly HashSet<Transform> LensMarkers = new HashSet<Transform>();
+    private static void NoteLens(Transform root)
+    {
+        Transform? marker = root.name == "fpano_thermal_lens" ? root : Deep(root, "fpano_thermal_lens", null);
+        if (marker != null)
+            LensMarkers.Add(marker);
     }
 
     private static Transform? RailsRootAbove(Transform? t)

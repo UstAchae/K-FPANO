@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.56";
+    public const string Version = "0.2.57";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1662,7 +1662,7 @@ internal static class EnvgFusion
     private static float _lensSearchAt = -10f;
     private static int _lensJitter;
     private static bool _loggedLens, _loggedLensGrass;
-    private static int _loggedLensSearch;
+    private static int _loggedLensSearch; private static bool _loggedLensFound;
     private static Camera? _motionCamera;
     private static int _lensGrassDraws;
     internal static bool LensWanted => EnvgFusionPlugin.FromLens?.Value == true;
@@ -1680,46 +1680,40 @@ internal static class EnvgFusion
 
     // the window of the thermal objective on the worn goggle (found again only when the goggle changes, at most once a
     // second while it is not found)
+    // the objective's marker on the worn goggle: of the F-PANO models made or placed (FpanoRailink notes each), the one
+    // nearest the eye, within half a metre (an icon's or the ground's are elsewhere)
+    private static readonly List<Transform> _goneMarkers = new List<Transform>();
     private static Transform? LensNode()
     {
-        if (_lensNode != null && ReferenceEquals(_lensItem, WornDevice))
-            return _lensNode;
-        if (Time.unscaledTime - _lensSearchAt < 1f && ReferenceEquals(_lensItem, WornDevice))
+        Camera? eye = _main;
+        if (eye == null)
             return null;
-        _lensSearchAt = Time.unscaledTime;
-        _lensItem = WornDevice;
-        _lensNode = null;
-        if (Wearer == null)
-            return null;
-        _lensQueue.Clear();
-        _lensQueue.Add(Wearer.gameObject.transform);
-        try
+        Vector3 at = eye.transform.position;
+        Transform? best = null;
+        float bestSq = 0.5f * 0.5f;
+        foreach (Transform t in FpanoRailink.LensMarkers)
         {
-            // (the helmet's model, as the body's head slot holds it, wherever it is parented)
-            if (Wearer.PlayerBody != null && Wearer.PlayerBody.SlotViews.TryGetByKey(EFT.InventoryLogic.EquipmentSlot.Headwear, out EFT.PlayerBody.SlotView head)
-                && head?.ParentedModel.Value != null)
-                _lensQueue.Insert(0, head.ParentedModel.Value.transform);
-            if (Wearer.PlayerBody != null && Wearer.PlayerBody.transform.root != Wearer.gameObject.transform.root)
-                _lensQueue.Add(Wearer.PlayerBody.transform.root);
+            if (t == null)
+            {
+                _goneMarkers.Add(t!);
+                continue;
+            }
+            float sq = (t.position - at).sqrMagnitude;
+            if (sq < bestSq)
+            {
+                bestSq = sq;
+                best = t;
+            }
         }
-        catch (System.Exception) { }
-        // (the node is a marker, without a renderer: it may sit under an object the eyepieces hide; its place is kept)
-        int devices = 0, searched = 0;
-        for (int i = 0; i < _lensQueue.Count && _lensNode == null; i++)
+        if (_goneMarkers.Count > 0)
         {
-            Transform t = _lensQueue[i];
-            searched++;
-            if (t.name == "fpano_thermal_lens")
-                _lensNode = t;
-            else if (t.name.StartsWith("nvg_fpano", System.StringComparison.Ordinal))
-                devices++;
-            for (int c = 0; c < t.childCount; c++)
-                _lensQueue.Add(t.GetChild(c));
+            foreach (Transform t in _goneMarkers)
+                FpanoRailink.LensMarkers.Remove(t);
+            _goneMarkers.Clear();
         }
-        _lensQueue.Clear();
-        if (_lensNode == null && _loggedLensSearch++ < 3)
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: no fpano_thermal_lens under " + Wearer.gameObject.name + " (" + searched + " nodes, " + devices + " nvg_fpano nodes)");
-        return _lensNode;
+        if (best == null && _loggedLensSearch++ < 3)
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: no objective marker within 0.5 m of the eye (" + FpanoRailink.LensMarkers.Count + " F-PANO models known)");
+        return best;
     }
     private static readonly List<Transform> _lensQueue = new List<Transform>();
 
@@ -1782,9 +1776,10 @@ internal static class EnvgFusion
         p.m12 += 2f * jy / h;
         drawn = p;
         cam.projectionMatrix = p;
-        if (!_loggedLens)
+        if (!_loggedLens || (node != null) != _loggedLensFound)
         {
             _loggedLens = true;
+            _loggedLensFound = node != null;
             Vector3 off = eye.InverseTransformPoint(at);
             EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + (node != null ? "at the goggle's objective (" + node.name + ")" : "the objective not found, 4 cm above the eye")
                 + ", from the eye " + (off.x * 100f).ToString("F1") + " cm right, " + (off.y * 100f).ToString("F1") + " up, " + (off.z * 100f).ToString("F1") + " forward; "
