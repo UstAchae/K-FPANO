@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.54";
+    public const string Version = "0.2.55";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1999,16 +1999,27 @@ internal static class EnvgFusion
                     _holeMask = new RenderTexture(mw, mh, 0, RenderTextureFormat.R8) { name = "Justachae F-PANO sights' hole", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
                     _holeMask.Create();
                 }
-                // over the lens camera's own depth buffer (this runs while it renders, before its transparent things):
-                // the glass is not in it, the sight's housing and everything else is
+                // first the glass seen at all, over the lens camera's own depth buffer (this runs while it renders,
+                // before its transparent things: the glass is not in it, everything in front of it is)
                 cb.SetRenderTarget(_holeMask, BuiltinRenderTextureType.CameraTarget);
                 cb.ClearRenderTarget(false, true, Color.clear);
             }
-            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
+            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 3);
             drawn++;
         }
         if (targets)
         {
+            // then the sights' own housings alone: where one lies within 20 cm behind the glass, no hole
+            cb.GetTemporaryRT(GlassDepthId, _holeMask!.width, _holeMask.height, 24, FilterMode.Point, RenderTextureFormat.Depth);
+            cb.SetRenderTarget(_holeMask, GlassDepthId);
+            cb.ClearRenderTarget(true, false, Color.clear);
+            foreach (GlassPart h in _housing)
+                if (h.Renderer != null && h.Renderer.gameObject.activeInHierarchy && h.Renderer.enabled)
+                    cb.DrawRenderer(h.Renderer, _glassMaterial, h.Sub, 1);
+            foreach (GlassPart p in _glass)
+                if (p.Renderer != null && p.Renderer.gameObject.activeInHierarchy)
+                    cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
+            cb.ReleaseTemporaryRT(GlassDepthId);
             cb.SetGlobalTexture(LensMaskId, _holeMask);
             // (in the thermal picture's own uv, read where this frame's jitter put it)
             Shader.SetGlobalVector(LensMaskOnId, new Vector4(1f, jitter.x, jitter.y, 1f));

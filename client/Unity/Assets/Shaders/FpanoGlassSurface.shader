@@ -52,13 +52,13 @@ Shader "Justachae/FPANO/GlassSurface"
             ENDCG
         }
 
-        // 1: a sight's housing, its depth only: what stands in front of the glass as the lens sees it keeps it hidden
+        // 1: a sight's own housing, its depth only (faces culled as the scene draws them: a tube's inside is no wall)
         Pass
         {
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull Off
+            Cull Back
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -68,18 +68,20 @@ Shader "Justachae/FPANO/GlassSurface"
             ENDCG
         }
 
-        // 2: the hole in the thermal picture (the user's, 2026-11-14): where the line from the thermal lens through a
-        // sight's glass goes on out through its objective end to the scene (more than 20 cm behind the glass), the
-        // thermal picture is cut and the tubes' picture alone shows; where it meets the sight's own hood or tube inside
-        // (nearer), the thermal picture stays. The sight's own shape, from its glass; nothing of the game's reticle or
-        // scope mask. Drawn against the lens camera's own depth buffer, the glass pushed 20 cm on along each pixel's ray
-        // (the same pixel, 20 cm deeper): the depth test passes only where the scene lies more than 20 cm behind the
-        // glass. Whatever stands in front of the glass (a hand, a helmet) is nearer still and keeps its thermal picture;
-        // the edge is the lens camera's own pixels, no texture read.
+        // The hole in the thermal picture (the user's, 2026-11-14): where the line from the thermal lens through a
+        // sight's glass goes on out through its objective end, the thermal picture is cut and the tubes' picture alone
+        // shows; where it meets the sight's OWN hood or tube inside within 20 cm, the thermal picture stays. The sight's
+        // own shape, from its glass; nothing of the game's reticle or scope mask. Two passes into the mask:
+        // 3: the glass seen at all, against the lens camera's own depth buffer: 1 where nothing stands in front of it
+        //    (a hand, a helmet keep their thermal picture).
+        // 2: then, against a depth buffer of the sight's own housing alone, the glass pushed 20 cm on along each pixel's
+        //    ray (the same pixel, 20 cm deeper): 0 where the housing lies nearer than that (its hood or tube inside).
+        //    The gun's own parts beyond the sight (a front sight, a rail) are not its housing: the hole goes on over them
+        //    (user: "瞄具区域里面能看到枪自己的热融合").
         Pass
         {
             ZWrite Off
-            ZTest LEqual
+            ZTest Greater
             Cull Off
             CGPROGRAM
             #pragma vertex vert
@@ -92,6 +94,20 @@ Shader "Justachae/FPANO/GlassSurface"
                 v *= (d + 0.2) / d;                       // along the ray: the same pixel, 20 cm deeper
                 return mul(UNITY_MATRIX_P, float4(v, 1.0));
             }
+            float4 frag() : SV_Target { return 0; }
+            ENDCG
+        }
+
+        Pass
+        {
+            ZWrite Off
+            ZTest LEqual
+            Cull Off
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            float4 vert(float4 vertex : POSITION) : SV_POSITION { return UnityObjectToClipPos(vertex); }
             float4 frag() : SV_Target { return 1; }
             ENDCG
         }

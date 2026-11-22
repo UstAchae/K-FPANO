@@ -357,6 +357,7 @@ Shader "Justachae/FPANO/Outline"
     // show no thermal picture at all. tuv: the thermal textures' uv.
     // a magnified scope's lens (its picture, the reticle's area): no thermal picture there; screen uv
     sampler2D _EnvgLensMask;
+    float4 _EnvgLensMask_TexelSize;
     float4 _EnvgLensMaskOn;   // x: 1 when drawn this frame, yz: this frame's sub-pixel offset (uv)
     float scopeLens(float2 uv)
     {
@@ -364,7 +365,18 @@ Shader "Justachae/FPANO/Outline"
             return 0.0;
         // (w 1: drawn by the lens camera, in the thermal picture's own uv)
         float2 at = _EnvgLensMaskOn.w > 0.5 ? toChain(uv) : uv;
-        return saturate(tex2D(_EnvgLensMask, at + _EnvgLensMaskOn.yz).r);
+        at += _EnvgLensMaskOn.yz;
+        if (_EnvgLensMaskOn.w < 0.5)
+            return saturate(tex2D(_EnvgLensMask, at).r);
+        // the sights' hole a mask pixel wider all round: its edge moves by up to one with the lens camera's sub-pixel
+        // offset and is softened when read, which left a seam of thermal picture around it (user: "扣掉的区域周围漏缝")
+        float2 t = _EnvgLensMask_TexelSize.xy;
+        float m = tex2D(_EnvgLensMask, at).r;
+        m = max(m, max(tex2D(_EnvgLensMask, at + float2(t.x, 0)).r, tex2D(_EnvgLensMask, at - float2(t.x, 0)).r));
+        m = max(m, max(tex2D(_EnvgLensMask, at + float2(0, t.y)).r, tex2D(_EnvgLensMask, at - float2(0, t.y)).r));
+        m = max(m, max(tex2D(_EnvgLensMask, at + t).r, tex2D(_EnvgLensMask, at - t).r));
+        m = max(m, max(tex2D(_EnvgLensMask, at + float2(t.x, -t.y)).r, tex2D(_EnvgLensMask, at - float2(t.x, -t.y)).r));
+        return saturate(m);
     }
 
     float beyondLens(float2 tuv)
