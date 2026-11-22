@@ -1,34 +1,96 @@
 # K-FPANO
 
+L3Harris F-PANO（四筒全景融合夜视仪）和 Ops-Core RAILINK 供电导轨，用于 SPT 4.1.6。包括物品、服务端模组和热像客户端。
+
 L3Harris F-PANO (fused panoramic night vision goggle) and the Ops-Core RAILINK powered rails for SPT 4.1.6: the items, their server mod and the thermal client.
 
 ## 0.2.63 beta 1：测试版
 
+这是测试版本，还在游戏里测试中，可能会有改动或问题，发现不对的地方欢迎反馈。
+
 This is a test version: the mod is still being tested in game, and things may change or break. Please report what looks wrong.
 
-## Items (sold by Peacekeeper, black and FDE)
+## 物品
 
-- **F-PANO**: four-tube panoramic night vision with a fused thermal picture (white hot / black hot), a heading HUD and the I2 GAIN bar. Fits nine helmet shapes (13 helmets) in their own NVG slot, or the RAILINK's.
-- **RAILINK**: powered rails with the battery built in; the F-PANO picture, cable and green light only when it is powered. Takes the helmet's headset (RAC, ComTac V/VI baked onto the rails), two ARC adapters (PRA/SCRA, one each side), two front lights and two strobes.
-- **Lights**: SureFire HL2-A (IR low/high, white low/high), Princeton Tec MPLS (red, white), CORE Survival HEL-STAR rail strobe (IR/visible, dim/bright).
+都在维和部队（Peacekeeper）出售，有黑色和沙色（FDE）两种颜色。
 
-Keys: Ctrl+H the strobes, Ctrl+Left / Ctrl+Right the left / right light; the arrow keys the F-PANO's thermal modes and I2 gain.
+| 物品 | 用途 | 价格 / 信任等级 |
+|---|---|---|
+| **F-PANO** | 四筒全景夜视仪（97 度视场，白磷），右内侧镜筒叠加热像，带数字罗盘和 I2 增益显示 | $2600，LL4 |
+| **RAILINK** | 头盔供电导轨，电池内置。F-PANO 只有装在带 RAILINK 的头盔上才有电 | $830，LL3 |
+| **SureFire HL2-A** | 头灯：红外弱、红外强、白光弱、白光强 | $380，LL2 |
+| **Princeton Tec MPLS** | 小型灯：红光、白光 | $160，LL1 |
+| **HEL-STAR 频闪灯** | 头顶频闪识别灯：红外 / 可见光，弱 / 强 | $500，LL2 |
 
-Conflicts: the RAILINK conflicts only with the GPNVG-18 and the K-ENVG-B goggles; the rails' F-PANO and the helmet's own NVG slot are not both filled; PRA/SCRA conflict with the ComTac V/VI; mandibles no longer conflict with the rail headsets. The old separate F-PANO mount and battery still load (owned copies) but fit nowhere and are not sold.
+### 能装在哪里
 
-## Install
+- **F-PANO** 能装在 9 种外形、共 13 顶头盔的夜视仪槽上（FAST MT、TC-2001/2002、TC 800、AirFrame、凯门鳄、EXFIL、Tor-2 等带 ARC 导轨的头盔），也能装在 RAILINK 自己的夜视仪槽上。
+- **RAILINK** 装在这些头盔的耳机槽上（没有耳机槽的头盔会多出一个 RAILINK 槽）。装上后头盔原来的导轨会隐藏。RAILINK 上有：
+  - 耳机槽：RAC、ComTac V、ComTac VI，耳机会卡在 RAILINK 的导轨上；
+  - 左右各一个 ARC 卡座：PRA、SCRA；
+  - 左右各一个前灯槽：HL2-A、MPLS；
+  - 左右各一个频闪灯槽：HEL-STAR。
+- **供电**：F-PANO 只有在带 RAILINK 的头盔上才有电。没电时可以翻下，但没有画面、不接电源线，物品图标右下角的灯不亮；有电时灯是绿色的。
 
-Unzip the release into the SPT folder: `SPT_Runtime/user/mods/UstAchae-FPANO` (server) and `BepInEx/plugins/JustachaeFPANO` (client).
+### 冲突规则
 
-With K-3PS-C 1.9.0 beta 1 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube, sized and centred on what the eye sees of it. With an older K-3PS-C (1.8.2 is the last release) or without it, the F-PANO uses the game's own full-screen night vision, its white phosphor and the thermal picture laid over the whole screen.
+- RAILINK 只和 GPNVG-18、ENVG-B 冲突，TATM 等其他夜视仪支架可以照常装在头盔上。
+- RAILINK 上的 F-PANO 和头盔自己夜视仪槽里的设备在同一个位置，两者不能同时装。
+- 装了 RAILINK 后，头盔自带的 ARC 卡座不能用，PRA、SCRA 只装在 RAILINK 左右两边；头盔自带卡座上已经有东西时，要先取下才能装 RAILINK。
+- PRA、SCRA 和 ComTac V/VI 冲突（ComTac 卡在同一段导轨上）。
+- 护颚（AF、凯门鳄、NeoSteel）不再和 RAILINK 上的耳机冲突；护耳和侧甲仍然冲突。
 
-## Thermal picture
+## 快捷键
 
-- Drawn the real way: a second camera at the goggle's thermal objective (above the right inner tube) renders the scene at the sensor's resolution (16 px per degree), turned as the eye's view. Near things show where the objective sees them, so a gun's sight blocks the thermal picture lower than it blocks the eye; a scope's magnification never enlarges the thermal picture. About 1.5 ms a frame for that camera (measured in the hideout). F12 advanced: 热像从物镜位置拍 (on); off takes the picture from the eye's own camera.
-- Sights cut a hole in it: where the line from the objective through a red dot's, holographic sight's or scope's glass goes on out through the sight's objective end, only the tubes' picture shows; the sight's own hood and tube keep their heat, and a hand or helmet in front keeps its own.
-- The gun and the hands are drawn from the present frame only (no trail when the gun sways).
+| 按键 | 作用 |
+|---|---|
+| 游戏的夜视仪开关（默认 **N**） | 翻下 / 翻上 F-PANO |
+| **→** / **←** | F-PANO 翻下时：切换模式（纯夜视 → 轮廓 → 白热融合 → 黑热融合） |
+| **↑** / **↓** | 调夜视管增益：点一下微调，按住连续变化（从 0 到满约 2.5 秒）；调节时热像框左边显示黄色的 I2 GAIN 竖条；调到 0 只剩热像 |
+| **H** | 游戏原版：开关全部头灯 |
+| **Ctrl + H** | 只切换 RAILINK 上频闪灯的效果（红外弱 / 红外强 / 可见光弱 / 可见光强） |
+| **Ctrl + ←** | 切换 RAILINK 左侧（佩戴者左边）前灯的模式 |
+| **Ctrl + →** | 切换 RAILINK 右侧前灯的模式 |
 
-## Repository
+快捷键都可以在 F12 设置里改：「F-PANO 热像轮廓」和「RAILINK 照明」两栏。菜单、背包或地图打开时方向键不起作用。
+
+配合 K-3PS-C 时，支架位置可以调：腰射时按住 **左 Alt + = / -** 升降，**左 Shift + = / -** 仰俯，**左 Ctrl + = / -** 前后；每个支架各自记住位置。
+
+## 四种模式
+
+- **纯夜视**：只有白磷夜视。
+- **轮廓**：温差的边缘画成琥珀色的线。
+- **白热融合**：整幅热像叠在夜视上，热的亮。
+- **黑热融合**：整幅热像叠在夜视上，冷的亮、热的暗。
+
+热像框上方是数字罗盘：黄色圆环，中间是当前朝向的度数（青色）。
+
+### F12 里常用的设置（「F-PANO 热像轮廓」）
+
+- 显示内容：当前模式。
+- 热像来源：物理模型（本模组按阳光、夜间散热、天空、植被、人体估算温度）/ 原版方法（照游戏原版热成像的做法）。
+- 夜视管增益、夜视亮度、白磷夜视开关。
+- 轮廓亮度、轮廓多少、草的轮廓强度。
+- 「高级」栏里还有热像分辨率、气温、延迟等参数，一般不用动。
+
+### 热像是怎么画的
+
+- 按真实的方式画：在夜视仪的热像物镜处（右内侧镜筒上方）放一台相机，按传感器的分辨率（每度 16 像素）拍场景，朝向和眼睛一致。近处的东西出现在物镜看到的位置，所以枪上的瞄具挡住热像的地方比挡住眼睛的地方偏下；瞄具的倍率不会放大热像。这台相机每帧约 1.5 毫秒（在藏身处测得）。F12 高级里「热像从物镜位置拍（真实画法）」可以关掉，关掉后热像取自眼睛这台相机。
+- 瞄具会在热像上挖洞：从物镜看过去，视线穿过红点、全息或倍镜的玻璃、从瞄具前端穿出去的地方，只显示夜视画面；瞄具自己的罩子和镜筒内壁保留热像，挡在瞄具前面的手、头盔也保留自己的热像。
+- 枪和手只用当前一帧的热像，晃枪时不会拖影。
+
+## 安装
+
+把发布的压缩包解压到 SPT 文件夹，会得到 `SPT_Runtime/user/mods/UstAchae-FPANO`（服务端）和 `BepInEx/plugins/JustachaeFPANO`（客户端）。
+
+- 配合 **K-3PS-C 1.9.0 beta 1 或更新版本**：F-PANO 通过四个镜筒的目镜成像，双眼合并，支架可调，热像画在右内侧镜筒里，大小和位置按眼睛实际看到的镜片来定。
+- 用旧版 K-3PS-C（最后一个正式版是 1.8.2）或不装：F-PANO 用游戏原版的全屏夜视，加上本模组的白磷效果，热像铺满整个屏幕。
+
+With K-3PS-C 1.9.0 beta 1 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube. With an older K-3PS-C (1.8.2 is the last release) or without it, the F-PANO uses the game's own full-screen night vision, its white phosphor and the thermal picture laid over the whole screen.
+
+旧版本里单独的 F-PANO 支架和电池物品还能加载（已有的不会丢），但装不到任何地方，也不再出售。
+
+## 仓库（开发用）
 
 - `item/` - Blender export (`export_parts.py`), frames, seat on the helmet, flip hinge and figure-8 eyepiece glass (`prepare.py`), items split (`split_items.py`), RAILINK fits per helmet (`fit_*.py`), ComTac bakes (`bake_headsets.py`), Unity bundle build (`Unity/Assets/Editor/FpanoBuilder.cs`, icon checks `IconCheck*.cs`), game shader swap (`finalize.py`). `nodes.json` lists the prefab's nodes, the thermal lens marker and the eyepiece discs for the other mods.
 - `server/` - SPT server mod, `install.py`.
