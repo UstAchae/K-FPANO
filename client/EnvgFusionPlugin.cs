@@ -24,12 +24,12 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.43";
+    public const string Version = "0.2.44";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
     internal static ManualLogSource? Log;
-    internal static ConfigEntry<bool>? On, WhitePhosphor;
+    internal static ConfigEntry<bool>? On, WhitePhosphor, FromLens;
     internal static ConfigEntry<float>? GrassAmount, ThermalField, Latency, MinSpread, GroundPatches, BodyHeat, ShapeNeedsHeat, Washout, Temporal, LineWidth, Brightness, Amount, TubeBrightness, Softness, Glow, Smoothing, AirTemperature, LightHeating, SkyCooling, I2Noise, HeatEdges, GeometryEdges, ResidualHeat, Declutter, LocalContrast;
     internal static ConfigEntry<float>? SensorResolution;
     internal static ConfigEntry<int>? RenderScale;
@@ -50,6 +50,8 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         Log = Logger;
         // ---- what to use: a few settings ----
         // the thermal channel works on its own whenever the F-PANO is worn and flipped down; this is for testing only
+        FromLens = Config.Bind(Advanced, "热像从物镜位置拍（真实画法）", true,
+            new ConfigDescription("开：热像由热像物镜位置的一台摄像机拍（物镜比眼睛高，近处的枪和瞄具挡住的地方偏下，瞄具倍率不放大热像）。关：热像取自眼睛这台摄像机的画面。", null, new ConfigurationManagerAttributes { IsAdvanced = true }));
         On = Config.Bind(Advanced, "调试：不戴 F-PANO 也开启", false,
             new ConfigDescription("测试用：打开后，不戴 F-PANO 也在全屏叠加热像。正常使用不用打开：戴上 F-PANO 并放下就会工作。", null, new ConfigurationManagerAttributes { IsAdvanced = true }));
         Show = Config.Bind(Section, "显示内容", ShowOutline,
@@ -247,6 +249,7 @@ internal static class EnvgFusion
     private static bool _loggedMain;
     private static readonly int JitterId = Shader.PropertyToID("_EnvgJitter");
     private static readonly int FootprintId = Shader.PropertyToID("_EnvgFootprint");
+    private static readonly int SrcCropId = Shader.PropertyToID("_EnvgSrcCrop");
     private static readonly int CropId = Shader.PropertyToID("_EnvgCrop"), CropPrevId = Shader.PropertyToID("_EnvgCropPrev");
 
     // The part of the screen the thermal picture is worked out for. Over the screen, all of it. In K-3PS-C's
@@ -966,13 +969,14 @@ internal static class EnvgFusion
     {
         if (_main == null || !GrassMaskWanted)
             return;
-        if (_grassMaskCb == null || _grassMaskCamera != _main)
+        Camera into = _lensCam != null && LensWanted ? _lensCam : _main;
+        if (_grassMaskCb == null || _grassMaskCamera != into)
         {
             if (_grassMaskCb != null && _grassMaskCamera != null)
                 _grassMaskCamera.RemoveCommandBuffer(CameraEvent.AfterGBuffer, _grassMaskCb);
             _grassMaskCb ??= new CommandBuffer { name = "Justachae F-PANO grass mask" };
-            _main.AddCommandBuffer(CameraEvent.AfterGBuffer, _grassMaskCb);
-            _grassMaskCamera = _main;
+            into.AddCommandBuffer(CameraEvent.AfterGBuffer, _grassMaskCb);
+            _grassMaskCamera = into;
         }
         if (_grassMaskFrame != Time.frameCount)
         {
@@ -1025,7 +1029,7 @@ internal static class EnvgFusion
 
     // at the end of the recording (the main camera's pre-render): the mask down to the sensor's pixels; or, with no
     // grass this frame or no use for it, an empty mask
-    private static void FinishGrassMask(Vector2 jitter)
+    private static void FinishGrassMask(Vector2 jitter, bool lens)
     {
         if (GrassMask == null || Material == null)
             return;
@@ -1041,8 +1045,10 @@ internal static class EnvgFusion
             return;
         }
         _grassMaskCb.SetGlobalVector(JitterId, new Vector4(jitter.x, jitter.y, 0f, 0f));
-        _grassMaskCb.SetGlobalVector(FootprintId, new Vector4(_crop.z / GrassMask.width, _crop.w / GrassMask.height, 0f, 0f));
+        _grassMaskCb.SetGlobalVector(SrcCropId, lens ? new Vector4(0f, 0f, 1f, 1f) : Vector4.zero);
+        _grassMaskCb.SetGlobalVector(FootprintId, lens ? new Vector4(1f / GrassMask.width, 1f / GrassMask.height, 0f, 0f) : new Vector4(_crop.z / GrassMask.width, _crop.w / GrassMask.height, 0f, 0f));
         _grassMaskCb.Blit(GrassScreenId, GrassMask, Material, 32);
+        _grassMaskCb.SetGlobalVector(SrcCropId, Vector4.zero);
         _grassMaskCb.ReleaseTemporaryRT(GrassScreenId);
     }
 
@@ -1053,6 +1059,7 @@ internal static class EnvgFusion
         {
             try
             {
+                DrawInstancesForLens(maskList, instancingBounds, layerMask);
                 RecordGrassMask(maskList, layerMask);
             }
             catch (System.Exception e)
@@ -1179,10 +1186,12 @@ internal static class EnvgFusion
     {
         if (_mainCopy != null && _mainCopyCamera != null)
             _mainCopyCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
-        if (_motionCopy != null && _mainCopyCamera != null)
-            _mainCopyCamera.RemoveCommandBuffer(CameraEvent.BeforeImageEffects, _motionCopy);
+        if (_motionCopy != null && _motionCamera != null)
+            _motionCamera.RemoveCommandBuffer(CameraEvent.BeforeImageEffects, _motionCopy);
         _motionCopy?.Release();
         _motionCopy = null;
+        _motionCamera = null;
+        FreeLens();
         _motionReady = false;
         _mainCopy?.Release();
         _mainCopy = null;
@@ -1368,9 +1377,14 @@ internal static class EnvgFusion
         {
             Matrix4x4 unjittered = main.nonJitteredProjectionMatrix;
             Matrix4x4 drawn = main.projectionMatrix;
-            Matrix4x4 worldToCam = main.worldToCameraMatrix;
+            // the thermal lens's own camera (the real way), or the main camera's frame
+            Camera? lensCam = EnvgFusionPlugin.FromLens?.Value == true ? PlaceLens(main, unjittered, fineWidth, fineHeight, out drawn, out unjittered) : null;
+            Camera source = lensCam != null ? lensCam : main;
+            Matrix4x4 worldToCam = source.worldToCameraMatrix;
             _camToWorld = worldToCam.inverse;
-            _tan = new Vector2(1f / unjittered.m00, 1f / unjittered.m11);
+            // (the full field's slopes, the crop's rays through it: the lens camera's view is the crop of the same field)
+            Matrix4x4 full = main.nonJitteredProjectionMatrix;
+            _tan = new Vector2(1f / full.m00, 1f / full.m11);
             // the camera now and last frame, as the scene is copied (after anything that moved it before it renders):
             // the still world's history is followed by them (see the shader's previousUv)
             Shader.SetGlobalMatrix(RpCamToWorldId, _camToWorld);
@@ -1390,13 +1404,15 @@ internal static class EnvgFusion
             // the frame is drawn with a sub-pixel offset (temporal anti-aliasing): read it back from where it is, so
             // the copies stay put
             Vector2 jitter = new Vector2(drawn.m02 - unjittered.m02, drawn.m12 - unjittered.m12) * -0.5f;
-            CopyMain(main, picture, normals, depth, albedo, specular, jitter);
-            FinishGrassMask(jitter);
+            CopyMain(source, main, picture, normals, depth, albedo, specular, jitter);
+            FinishGrassMask(jitter, lensCam != null);
             CheckGrassMask();
+            if (lensCam != null)
+                RenderLens(lensCam);
             if (!_loggedMain)
             {
                 _loggedMain = true;
-                EnvgFusionPlugin.Log?.LogInfo("F-PANO scene data from the main camera's own buffers (" + main.actualRenderingPath + ", jitter " + jitter.x.ToString("F5") + ", " + jitter.y.ToString("F5") + ")");
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO scene data from " + (lensCam != null ? "the thermal lens's own camera" : "the main camera's own buffers") + " (" + source.actualRenderingPath + ", jitter " + jitter.x.ToString("F5") + ", " + jitter.y.ToString("F5") + ")");
             }
         }
 
@@ -1595,7 +1611,7 @@ internal static class EnvgFusion
     private static RenderTexture? _lensMask;
     private static readonly int LensMaskId = Shader.PropertyToID("_EnvgLensMask"), LensMaskOnId = Shader.PropertyToID("_EnvgLensMaskOn");
     private static bool _loggedLensMask;
-    private static void DrawScopeLens(CommandBuffer cb, Camera main, Vector2 jitter)
+    private static void DrawScopeLens(CommandBuffer cb, Camera main, Vector2 jitter, bool lensCamera)
     {
         Renderer? lens = null;
         try { lens = EFT.CameraControl.CameraManager.Instance?.OpticCameraManager?.CurrentOpticSight?.LensRenderer; } catch (System.Exception) { }
@@ -1619,45 +1635,259 @@ internal static class EnvgFusion
         cb.ClearRenderTarget(false, true, Color.clear);
         cb.DrawRenderer(lens, _lensMaskMaterial, 0, 0);
         cb.SetGlobalTexture(LensMaskId, _lensMask);
-        Shader.SetGlobalVector(LensMaskOnId, new Vector4(1f, jitter.x, jitter.y, 0f));
+        Shader.SetGlobalVector(LensMaskOnId, new Vector4(1f, jitter.x, jitter.y, lensCamera ? 1f : 0f));
         if (!_loggedLensMask)
         {
             _loggedLensMask = true;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO: a scope's lens (" + lens.name + ") left out of the thermal picture, its housing kept");
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO: a scope's lens (" + lens.name + ") left out of the thermal picture, its housing kept, as seen from " + (lensCamera ? "the thermal lens" : "the eye"));
         }
     }
 
-    private static void CopyMain(Camera main, RenderTexture picture, RenderTexture normals, RenderTexture depth, RenderTexture albedo, RenderTexture specular, Vector2 jitter)
+    // ---- the thermal lens's own camera (the real way): the scene drawn once more from the thermal objective, which sits
+    // above and beside the eye, turned as the eye's view (the two are aligned at a distance), over the crop of the same
+    // field the thermal picture fills. Near things show where the lens sees them: the gun and a scope lower than to the
+    // eye, so through a scope the thermal picture is still there, and never magnified by it (the scope's own picture is
+    // another camera's). Its deferred buffers are copied as the main camera's were. Rendered by hand in the main
+    // camera's pre-render, after its place for this frame is set; a sub-pixel jitter of its own (Halton 2, 3 over 8
+    // frames) for the heat's history to gather. The game's instanced grass and trees are drawn for it too
+    // (DrawInstancesForLens); shadows only for the physical model (the game's method reads the colour alone). ----
+    private const int LensSupersample = 2;   // the lens camera's pixels per thermal processing pixel, each way
+    private const float LensNear = 0.03f;    // the goggle's own housing around the window left out
+    private static Camera? _lensCam;
+    private static RenderTexture? _lensTarget;
+    private static Transform? _lensNode;
+    private static EFT.InventoryLogic.Item? _lensItem;
+    private static float _lensSearchAt = -10f;
+    private static int _lensJitter;
+    private static bool _loggedLens, _loggedLensGrass;
+    private static Camera? _motionCamera;
+    private static int _lensGrassDraws;
+    internal static bool LensWanted => EnvgFusionPlugin.FromLens?.Value == true;
+
+    private static float Halton(int index, int b)
     {
-        if (_mainCopy == null || _mainCopyCamera != main)
+        float f = 1f, r = 0f;
+        for (int i = index; i > 0; i /= b)
+        {
+            f /= b;
+            r += f * (i % b);
+        }
+        return r;
+    }
+
+    // the window of the thermal objective on the worn goggle (found again only when the goggle changes, at most once a
+    // second while it is not found)
+    private static Transform? LensNode()
+    {
+        if (_lensNode != null && ReferenceEquals(_lensItem, WornDevice) && _lensNode.gameObject.activeInHierarchy)
+            return _lensNode;
+        if (Time.unscaledTime - _lensSearchAt < 1f && ReferenceEquals(_lensItem, WornDevice))
+            return null;
+        _lensSearchAt = Time.unscaledTime;
+        _lensItem = WornDevice;
+        _lensNode = null;
+        if (Wearer == null)
+            return null;
+        _lensQueue.Clear();
+        _lensQueue.Add(Wearer.gameObject.transform);
+        for (int i = 0; i < _lensQueue.Count && _lensNode == null; i++)
+        {
+            Transform t = _lensQueue[i];
+            if (t.name == "fpano_thermal_lens" && t.gameObject.activeInHierarchy)
+                _lensNode = t;
+            for (int c = 0; c < t.childCount; c++)
+                _lensQueue.Add(t.GetChild(c));
+        }
+        _lensQueue.Clear();
+        return _lensNode;
+    }
+    private static readonly List<Transform> _lensQueue = new List<Transform>();
+
+    // the lens camera placed for this frame: its projection the crop of the main camera's unjittered field with our
+    // jitter (drawn) and without (unjittered); null if it can't be made
+    private static Camera? PlaceLens(Camera main, Matrix4x4 full, int width, int height, out Matrix4x4 drawn, out Matrix4x4 unjittered)
+    {
+        drawn = unjittered = full;
+        if (_lensCam == null)
+        {
+            var go = new GameObject("Justachae F-PANO thermal lens camera");
+            Object.DontDestroyOnLoad(go);
+            _lensCam = go.AddComponent<Camera>();
+            _lensCam.CopyFrom(main);
+            _lensCam.enabled = false;
+            _lensCam.renderingPath = RenderingPath.DeferredShading;
+            _lensCam.allowHDR = true;
+            _lensCam.allowMSAA = false;
+            _lensCam.depthTextureMode = DepthTextureMode.Depth;
+        }
+        int w = Mathf.Max(width * LensSupersample, 16), h = Mathf.Max(height * LensSupersample, 16);
+        if (_lensTarget == null || _lensTarget.width != w || _lensTarget.height != h)
+        {
+            if (_lensTarget != null)
+            {
+                _lensTarget.Release();
+                Object.Destroy(_lensTarget);
+            }
+            _lensTarget = new RenderTexture(w, h, 24, RenderTextureFormat.ARGBHalf) { name = "Justachae F-PANO thermal lens", filterMode = FilterMode.Bilinear };
+            _lensTarget.Create();
+        }
+        Camera cam = _lensCam;
+        cam.targetTexture = _lensTarget;
+        cam.cullingMask = main.cullingMask;
+        cam.clearFlags = main.clearFlags;
+        cam.backgroundColor = main.backgroundColor;
+        cam.farClipPlane = main.farClipPlane;
+        cam.nearClipPlane = LensNear;
+        cam.useOcclusionCulling = main.useOcclusionCulling;
+        cam.layerCullDistances = main.layerCullDistances;
+        cam.layerCullSpherical = main.layerCullSpherical;
+        // its place: the objective's window on the goggle, else a little above the eye; turned as the eye's view
+        Transform eye = main.transform;
+        Transform? node = LensNode();
+        Vector3 at = node != null ? node.position : eye.position + eye.up * 0.04f;
+        cam.transform.SetPositionAndRotation(at, eye.rotation);
+        // the crop of the full field (uv x, y, w, h) as an off-centre projection
+        Vector4 c = _crop.z > 0f ? _crop : new Vector4(0f, 0f, 1f, 1f);
+        float ox = 2f * c.x + c.z - 1f, oy = 2f * c.y + c.w - 1f;
+        Matrix4x4 p = full;
+        p.m00 = full.m00 / c.z; p.m02 = (full.m02 + ox) / c.z;
+        p.m11 = full.m11 / c.w; p.m12 = (full.m12 + oy) / c.w;
+        unjittered = p;
+        // our jitter: half a thermal pixel either way
+        _lensJitter = (_lensJitter + 1) & 7;
+        float jx = (Halton(_lensJitter + 1, 2) - 0.5f) * LensSupersample, jy = (Halton(_lensJitter + 1, 3) - 0.5f) * LensSupersample;
+        p.m02 += 2f * jx / w;
+        p.m12 += 2f * jy / h;
+        drawn = p;
+        cam.projectionMatrix = p;
+        if (!_loggedLens)
+        {
+            _loggedLens = true;
+            Vector3 off = eye.InverseTransformPoint(at);
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + (node != null ? "at the goggle's objective (" + node.name + ")" : "the objective not found, 4 cm above the eye")
+                + ", from the eye " + (off.x * 100f).ToString("F1") + " cm right, " + (off.y * 100f).ToString("F1") + " up, " + (off.z * 100f).ToString("F1") + " forward; "
+                + w + "x" + h + " over the crop " + c.x.ToString("F3") + "," + c.y.ToString("F3") + " " + c.z.ToString("F3") + "x" + c.w.ToString("F3"));
+        }
+        return cam;
+    }
+
+    private static void RenderLens(Camera cam)
+    {
+        bool shadows = EnvgFusionPlugin.HeatSource?.Value != EnvgFusionPlugin.SourceNative;
+        float keep = QualitySettings.shadowDistance;
+        if (!shadows)
+            QualitySettings.shadowDistance = 0f;
+        try
+        {
+            cam.Render();
+        }
+        catch (System.Exception e)
+        {
+            EnvgFusionPlugin.Log?.LogWarning("F-PANO thermal lens camera: render failed: " + e.Message);
+        }
+        finally
+        {
+            if (!shadows)
+                QualitySettings.shadowDistance = keep;
+        }
+        if (!_loggedLensGrass && _lensGrassDraws > 0)
+        {
+            _loggedLensGrass = true;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + _lensGrassDraws + " instanced draws (grass, trees) given to it as well; shadows " + (shadows ? "on" : "off (the game's method)"));
+        }
+    }
+
+    // the game's instanced vegetation is drawn for the main camera alone (GPU Instancer): the same instances, culled for
+    // the main camera's view (the lens camera's is a crop of it), drawn for the lens camera too
+    private static void DrawInstancesForLens(System.Collections.IList list, Bounds bounds, int layerMask)
+    {
+        if (_lensCam == null || !LensWanted)
+            return;
+        foreach (object entry in list)
+        {
+            if (entry is not GPUInstancer.GPUInstancerRuntimeData data || data.transformationMatrixVisibilityBuffer == null
+                || data.bufferSize == 0 || data.instanceCount == 0 || data.instanceLODs == null || data.argsBuffer == null)
+                continue;
+            foreach (GPUInstancer.GPUInstancerPrototypeLOD lod in data.instanceLODs)
+            {
+                if (lod?.renderers == null)
+                    continue;
+                foreach (GPUInstancer.GPUInstancerRenderer renderer in lod.renderers)
+                {
+                    if (renderer?.materials == null || renderer.mesh == null || (layerMask & (1 << renderer.layer)) == 0)
+                        continue;
+                    for (int m = 0; m < renderer.materials.Count; m++)
+                    {
+                        Material material = renderer.materials[m];
+                        if (material == null)
+                            continue;
+                        int sub = Mathf.Min(m, renderer.mesh.subMeshCount - 1);
+                        int offset = (renderer.argsBufferOffset + 5 * sub) * GPUInstancer.GPUInstancerConstants.STRIDE_SIZE_INT;
+                        Graphics.DrawMeshInstancedIndirect(renderer.mesh, sub, material, bounds, data.argsBuffer, offset, renderer.mpb,
+                            ShadowCastingMode.Off, true, renderer.layer, _lensCam);
+                        _lensGrassDraws++;
+                    }
+                }
+            }
+        }
+    }
+
+    private static void FreeLens()
+    {
+        if (_lensCam != null)
+            Object.Destroy(_lensCam.gameObject);
+        _lensCam = null;
+        if (_lensTarget != null)
+        {
+            _lensTarget.Release();
+            Object.Destroy(_lensTarget);
+        }
+        _lensTarget = null;
+        _lensNode = null;
+        _lensItem = null;
+    }
+
+    private static void CopyMain(Camera source, Camera main, RenderTexture picture, RenderTexture normals, RenderTexture depth, RenderTexture albedo, RenderTexture specular, Vector2 jitter)
+    {
+        bool lens = source != main;
+        if (_mainCopy == null || _mainCopyCamera != source)
         {
             if (_mainCopy != null && _mainCopyCamera != null)
                 _mainCopyCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
             _mainCopy ??= new CommandBuffer { name = "Justachae F-PANO scene copy" };
-            main.AddCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
-            _mainCopyCamera = main;
+            source.AddCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
+            _mainCopyCamera = source;
         }
         _mainCopy.Clear();
         _mainCopy.SetGlobalVector(JitterId, new Vector4(jitter.x, jitter.y, 0f, 0f));
-        _mainCopy.SetGlobalVector(FootprintId, new Vector4(_crop.z / normals.width, _crop.w / normals.height, 0f, 0f));
+        // (the lens camera's picture is the crop itself: one sensor pixel is 1 / its size)
+        _mainCopy.SetGlobalVector(SrcCropId, lens ? new Vector4(0f, 0f, 1f, 1f) : Vector4.zero);
+        _mainCopy.SetGlobalVector(FootprintId, lens ? new Vector4(1f / normals.width, 1f / normals.height, 0f, 0f) : new Vector4(_crop.z / normals.width, _crop.w / normals.height, 0f, 0f));
         _mainCopy.Blit(BuiltinRenderTextureType.CameraTarget, picture, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer2, normals, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, albedo, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer1, specular, Material, 25);
         _mainCopy.Blit(normals, depth, Material, 12);
         DrawBodies(_mainCopy);
-        DrawScopeLens(_mainCopy, main, jitter);
+        DrawScopeLens(_mainCopy, source, jitter, lens);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);
+        _mainCopy.SetGlobalVector(SrcCropId, Vector4.zero);
 
+        // the motion of people: the main camera's own vectors (the lens camera, rendered by hand, has none worth the
+        // name), at the same place on the screen through the crop
         if ((main.depthTextureMode & DepthTextureMode.MotionVectors) == 0)
             main.depthTextureMode |= DepthTextureMode.MotionVectors | DepthTextureMode.Depth;
-        if (_motionCopy == null)
+        if (_motionCopy == null || _motionCamera != main)
         {
-            _motionCopy = new CommandBuffer { name = "Justachae F-PANO motion copy" };
+            if (_motionCopy != null && _motionCamera != null)
+                _motionCamera.RemoveCommandBuffer(CameraEvent.BeforeImageEffects, _motionCopy);
+            _motionCopy ??= new CommandBuffer { name = "Justachae F-PANO motion copy" };
             main.AddCommandBuffer(CameraEvent.BeforeImageEffects, _motionCopy);
+            _motionCamera = main;
         }
         _motionCopy.Clear();
         _motionCopy.SetGlobalVector(JitterId, Vector4.zero);
+        _motionCopy.SetGlobalVector(SrcCropId, Vector4.zero);
         _motionCopy.SetGlobalVector(FootprintId, Vector4.zero);
         _motionCopy.Blit(BuiltinRenderTextureType.MotionVectors, Motion!, Material, 25);
         _motionReady = true;

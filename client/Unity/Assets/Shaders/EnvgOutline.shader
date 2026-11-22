@@ -48,6 +48,10 @@ Shader "Justachae/FPANO/Outline"
     float2 toScreen(float2 cuv) { float4 c = cropOf(_EnvgCrop); return c.xy + cuv * c.zw; }
     float2 toChain(float2 suv) { float4 c = cropOf(_EnvgCrop); return (suv - c.xy) / c.zw; }
     float2 toChainPrev(float2 suv) { float4 c = cropOf(_EnvgCropPrev); return (suv - c.xy) / c.zw; }
+    // where the copies read their source: the main camera's frame through the crop (all 0), or the lens camera's own
+    // picture, which is the crop already (0, 0, 1, 1)
+    float4 _EnvgSrcCrop;
+    float2 toSource(float2 cuv) { return _EnvgSrcCrop.z > 0.0 ? _EnvgSrcCrop.xy + cuv * _EnvgSrcCrop.zw : toScreen(cuv); }
 
     float4 fragCopy(v2f i) : SV_Target
     {
@@ -352,7 +356,9 @@ Shader "Justachae/FPANO/Outline"
     {
         if (_EnvgLensMaskOn.x < 0.5)
             return 0.0;
-        return saturate(tex2D(_EnvgLensMask, uv + _EnvgLensMaskOn.yz).r);
+        // (w 1: drawn by the lens camera, in the thermal picture's own uv)
+        float2 at = _EnvgLensMaskOn.w > 0.5 ? toChain(uv) : uv;
+        return saturate(tex2D(_EnvgLensMask, at + _EnvgLensMaskOn.yz).r);
     }
 
     float beyondLens(float2 tuv)
@@ -745,7 +751,7 @@ Shader "Justachae/FPANO/Outline"
                 [unroll] for (int y = 0; y < 4; y++)
                     [unroll] for (int x = 0; x < 4; x++)
                     {
-                        float v = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, toScreen(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy));
+                        float v = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, toSource(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy));
                         s[y * 4 + x] = v;
                         sd += v;
                         sx += v * (x - 1.5);
@@ -1387,7 +1393,7 @@ Shader "Justachae/FPANO/Outline"
                 float4 sum = 0;
                 [unroll] for (int y = 0; y < 4; y++)
                     [unroll] for (int x = 0; x < 4; x++)
-                        sum += tex2D(_MainTex, toScreen(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy);
+                        sum += tex2D(_MainTex, toSource(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy);
                 return sum / 16.0;
             }
             ENDCG
@@ -1618,7 +1624,7 @@ Shader "Justachae/FPANO/Outline"
                 float c = 0;
                 [unroll] for (int y = 0; y < 4; y++)
                     [unroll] for (int x = 0; x < 4; x++)
-                        c += tex2D(_MainTex, toScreen(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy).r > -50.0 ? 1.0 : 0.0;
+                        c += tex2D(_MainTex, toSource(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy).r > -50.0 ? 1.0 : 0.0;
                 c /= 16.0;
                 return float4(c, c, c, 1);
             }
