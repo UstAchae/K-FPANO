@@ -1485,7 +1485,8 @@ Shader "Justachae/FPANO/Outline"
                     }
                 }
                 float2 previous = previousUv(i.uv);
-                if (_EnvgTemporal.x <= 0.0 || any(previous < 0.0) || any(previous > 1.0))
+                // (the gun and the hands: this frame's own lines, as their heat)
+                if (_EnvgTemporal.x <= 0.0 || any(previous < 0.0) || any(previous > 1.0) || nearHeld(i.uv))
                     return float4(c, c, c, 1);
                 // (fetched sharply, as the heat's history: a bilinear fetch each frame, the view moving, flattened the
                 // lines' crests and fewer lines came through while turning)
@@ -1781,13 +1782,11 @@ Shader "Justachae/FPANO/Outline"
                 // another sub-pixel, change a little every frame though nothing moved; only many frames together are
                 // steady. On the same surface the frames are averaged (see sameSurfaceThen); elsewhere (people,
                 // something that came into view) last frame's heat is held to this frame's neighbourhood, as before.
-                // the gun and the hands go with the camera: last frame's heat at the same place on the screen, held
-                // to this frame's neighbourhood (not followed as the still world: that drew their ghosts)
+                // the gun and the hands: this frame's own heat. They sway on their own against the camera, and no
+                // history of them (followed as the still world, or held at the same place) stays with them: it trailed
+                // a ghost of the gun behind it while it swung (the user's video, F-PANO 0.2.52)
                 if (nearHeld(i.uv))
-                {
-                    float2 same = toChainPrev(toScreen(i.uv));
-                    return lerp(c, clamp(tex2D(_EnvgHeatHistory, same), lo, hi), _EnvgHeatTemporal.x);
-                }
+                    return c;
                 if (sameSurfaceThen(previous, predicted))
                 {
                     if (!historyHolds(i.uv, previous))
