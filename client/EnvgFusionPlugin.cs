@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.59";
+    public const string Version = "0.2.60";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1665,7 +1665,8 @@ internal static class EnvgFusion
     private static int _loggedLensSearch; private static bool _loggedLensFound;
     private static Camera? _motionCamera;
     private static int _lensGrassDraws;
-    internal static bool LensWanted => EnvgFusionPlugin.FromLens?.Value == true;
+    private static bool _lensActive;   // this frame the lens camera is in use (its objective found)
+    internal static bool LensWanted => EnvgFusionPlugin.FromLens?.Value == true && _lensActive;
 
     private static float Halton(int index, int b)
     {
@@ -1760,7 +1761,16 @@ internal static class EnvgFusion
         // its place: the objective's window on the goggle, else a little above the eye; turned as the eye's view
         Transform eye = main.transform;
         Transform? node = LensNode();
-        Vector3 at = node != null ? node.position : eye.position + eye.up * 0.04f;
+        // (no objective found: the main camera's own buffers, as without the lens camera; a place guessed near the eye
+        // put the camera inside the goggle and its eyecups, a veil over the whole thermal picture)
+        _lensActive = node != null;
+        if (node == null)
+        {
+            drawn = main.projectionMatrix;
+            unjittered = main.nonJitteredProjectionMatrix;
+            return null;
+        }
+        Vector3 at = node.position;
         cam.transform.SetPositionAndRotation(at, eye.rotation);
         // the crop of the full field (uv x, y, w, h) as an off-centre projection
         Vector4 c = _crop.z > 0f ? _crop : new Vector4(0f, 0f, 1f, 1f);
@@ -1781,7 +1791,7 @@ internal static class EnvgFusion
             _loggedLens = true;
             _loggedLensFound = node != null;
             Vector3 off = eye.InverseTransformPoint(at);
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + (node != null ? "at the goggle's objective (" + node.name + ")" : "the objective not found, 4 cm above the eye")
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + "at the goggle's objective (" + node.name + ")"
                 + ", from the eye " + (off.x * 100f).ToString("F1") + " cm right, " + (off.y * 100f).ToString("F1") + " up, " + (off.z * 100f).ToString("F1") + " forward; "
                 + w + "x" + h + " over the crop " + c.x.ToString("F3") + "," + c.y.ToString("F3") + " " + c.z.ToString("F3") + "x" + c.w.ToString("F3"));
         }
