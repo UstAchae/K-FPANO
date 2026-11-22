@@ -14,9 +14,9 @@ Conflicts: the RAILINK conflicts only with the GPNVG-18 and the K-ENVG-B goggles
 
 ## Install
 
-Unzip the release into the SPT folder: `SPT_Runtime/user/mods/UstAchae-FPANO` (server) and `BepInEx/plugins/JustachaeFPANO` (client). Works on its own; with K-3PS-C its eyepieces image the device.
+Unzip the release into the SPT folder: `SPT_Runtime/user/mods/UstAchae-FPANO` (server) and `BepInEx/plugins/JustachaeFPANO` (client).
 
-Works on its own (the thermal picture over the screen). With K-3PS-C 1.9.0 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube, sized and centred on what the eye sees of it.
+Works on its own (the thermal picture over the screen). With K-3PS-C 1.9.0 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube, sized and centred on what the eye sees of it. With an older K-3PS-C (1.8.2 is the last release) or without it, the F-PANO is a plain goggle with the game's own full-screen picture.
 
 ## Thermal picture
 
