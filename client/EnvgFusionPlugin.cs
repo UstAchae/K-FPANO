@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.51";
+    public const string Version = "0.2.52";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1999,20 +1999,16 @@ internal static class EnvgFusion
                     _holeMask = new RenderTexture(mw, mh, 0, RenderTextureFormat.R8) { name = "Justachae F-PANO sights' hole", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
                     _holeMask.Create();
                 }
-                cb.GetTemporaryRT(GlassDepthId, mw, mh, 24, FilterMode.Point, RenderTextureFormat.Depth);
-                cb.SetRenderTarget(_holeMask, GlassDepthId);
-                cb.ClearRenderTarget(true, true, Color.clear);
-                // the housings first, their depth only: what stands in front of the glass as the lens sees it
-                foreach (GlassPart h in _housing)
-                    if (h.Renderer != null && h.Renderer.gameObject.activeInHierarchy && h.Renderer.enabled)
-                        cb.DrawRenderer(h.Renderer, _glassMaterial, h.Sub, 1);
+                // over the lens camera's own depth buffer (this runs while it renders, before its transparent things):
+                // the glass is not in it, the sight's housing and everything else is
+                cb.SetRenderTarget(_holeMask, BuiltinRenderTextureType.CameraTarget);
+                cb.ClearRenderTarget(false, true, Color.clear);
             }
             cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
             drawn++;
         }
         if (targets)
         {
-            cb.ReleaseTemporaryRT(GlassDepthId);
             cb.SetGlobalTexture(LensMaskId, _holeMask);
             // (in the thermal picture's own uv, read where this frame's jitter put it)
             Shader.SetGlobalVector(LensMaskOnId, new Vector4(1f, jitter.x, jitter.y, 1f));

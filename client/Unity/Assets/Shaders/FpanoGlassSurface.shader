@@ -71,8 +71,11 @@ Shader "Justachae/FPANO/GlassSurface"
         // 2: the hole in the thermal picture (the user's, 2026-11-14): where the line from the thermal lens through a
         // sight's glass goes on out through its objective end to the scene (more than 20 cm behind the glass), the
         // thermal picture is cut and the tubes' picture alone shows; where it meets the sight's own hood or tube inside
-        // (nearer), the thermal picture stays. Over the lens camera's own depth at its full size (the glass is not in it):
-        // something in front of the sight keeps its place, and the edge is as sharp as the lens camera's picture.
+        // (nearer), the thermal picture stays. The sight's own shape, from its glass; nothing of the game's reticle or
+        // scope mask. Drawn against the lens camera's own depth buffer, the glass pushed 20 cm on along each pixel's ray
+        // (the same pixel, 20 cm deeper): the depth test passes only where the scene lies more than 20 cm behind the
+        // glass. Whatever stands in front of the glass (a hand, a helmet) is nearer still and keeps its thermal picture;
+        // the edge is the lens camera's own pixels, no texture read.
         Pass
         {
             ZWrite Off
@@ -82,22 +85,14 @@ Shader "Justachae/FPANO/GlassSurface"
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
-            UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
-            struct v2f { float4 pos : SV_POSITION; float4 sp : TEXCOORD0; float depth : TEXCOORD1; };
-            v2f vert(float4 vertex : POSITION)
+            float4 vert(float4 vertex : POSITION) : SV_POSITION
             {
-                v2f o;
-                o.pos = UnityObjectToClipPos(vertex);
-                o.sp = ComputeScreenPos(o.pos);
-                o.depth = -UnityObjectToViewPos(vertex.xyz).z;
-                return o;
+                float3 v = UnityObjectToViewPos(vertex.xyz);
+                float d = max(-v.z, 1e-4);
+                v *= (d + 0.2) / d;                       // along the ray: the same pixel, 20 cm deeper
+                return mul(UNITY_MATRIX_P, float4(v, 1.0));
             }
-            float4 frag(v2f i) : SV_Target
-            {
-                float raw = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.sp.xy / i.sp.w);
-                float behind = LinearEyeDepth(raw);
-                return behind - i.depth > 0.2 ? 1 : 0;
-            }
+            float4 frag() : SV_Target { return 1; }
             ENDCG
         }
     }
