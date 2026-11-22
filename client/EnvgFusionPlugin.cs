@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.39";
+    public const string Version = "0.2.40";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -169,6 +169,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
+        FpanoCost.Update();
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
         {
@@ -211,7 +212,11 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     private void LateUpdate() => EnvgFusion.SetWhitePhosphor();
 
     // every plugin's assembly is loaded by now: K-3PS-C's eyepieces, if it is there
-    private void Start() => EyepieceLink.Bind();
+    private void Start()
+    {
+        EyepieceLink.Bind();
+        FpanoCost.Start();
+    }
 }
 
 internal static class EnvgFusion
@@ -649,7 +654,7 @@ internal static class EnvgFusion
                 _tubeFrame = Time.frameCount;
                 MeasureBrightness(_main);
             }
-            if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
+            if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
                 return;
             Graphics.ExecuteCommandBuffer(_overlayDraw);
             RequestHistogram();
@@ -715,8 +720,9 @@ internal static class EnvgFusion
             return false;
         string show = EnvgFusionPlugin.Show?.Value ?? EnvgFusionPlugin.ShowOutline;
         // (the right pod swung up: its tube, the thermal module with it, is off)
-        if (show == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
+        if (show == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
             return false;
+        long cpuFrom = FpanoCost.Now;
         if (_fusedFrame != Time.frameCount)
         {
             // the chain and the latency ring move on once a frame, however many times the eyepieces ask
@@ -761,6 +767,7 @@ internal static class EnvgFusion
         Material.SetVector(ScreenTexelId, new Vector4(1f / Mathf.Max(dest.width, 1) / _crop.z, 1f / Mathf.Max(dest.height, 1) / _crop.w, EnvgFusionPlugin.LineWidth?.Value ?? 1.5f, 0f));
         _fuseDraw ??= new CommandBuffer { name = "Justachae F-PANO into the eyepieces" };
         _fuseDraw.Clear();
+        FpanoCost.Mark(_fuseDraw, FpanoCost.Group.Composite, true);
         // the tube's picture at the set gain (0: the tubes dark, the thermal picture alone)
         // (handed to the eyepieces for both tubes when they take it; else applied here to the right one)
         EyepieceLink.SetGain(I2Gain);
@@ -776,7 +783,9 @@ internal static class EnvgFusion
         _fuseDraw.SetViewport(new Rect(0f, 0f, dest.width, dest.height));
         _fuseDraw.DrawMesh(_fuseQuad, Matrix4x4.identity, Material, 0, pass);
         DrawHeading(_fuseDraw, at, dest, settled, EyepieceLink.FusedRect.y * radius * share, EyepieceLink.FusedRect.x * radius * share / aspect);
+        FpanoCost.Mark(_fuseDraw, FpanoCost.Group.Composite, false);
         Graphics.ExecuteCommandBuffer(_fuseDraw);
+        FpanoCost.AddCpu(cpuFrom);
         // the screen's own draw keeps the field at the centre
         Material.SetVector(FieldAtId, Vector4.zero);
         if (!_loggedFuse)
@@ -1279,7 +1288,7 @@ internal static class EnvgFusion
             _mainCopy.Clear();
         if (!Active || camera != _main || _main == null || Material == null)
             return;
-        if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
+        if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
         {
             _mainCopy?.Clear();
             _motionCopy?.Clear();
@@ -1287,7 +1296,9 @@ internal static class EnvgFusion
         }
         try
         {
+            long from = FpanoCost.Now;
             RenderThermal(_main);
+            FpanoCost.AddCpu(from);
         }
         catch (System.Exception e)
         {
@@ -1640,6 +1651,7 @@ internal static class EnvgFusion
         _mainCopy.Clear();
         _mainCopy.SetGlobalVector(JitterId, new Vector4(jitter.x, jitter.y, 0f, 0f));
         _mainCopy.SetGlobalVector(FootprintId, new Vector4(_crop.z / normals.width, _crop.w / normals.height, 0f, 0f));
+        FpanoCost.Mark(_mainCopy, FpanoCost.Group.SceneCopy, true);
         _mainCopy.Blit(BuiltinRenderTextureType.CameraTarget, picture, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer2, normals, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, albedo, Material, 25);
@@ -1647,6 +1659,7 @@ internal static class EnvgFusion
         _mainCopy.Blit(normals, depth, Material, 12);
         DrawBodies(_mainCopy);
         DrawScopeLens(_mainCopy, main, jitter);
+        FpanoCost.Mark(_mainCopy, FpanoCost.Group.SceneCopy, false);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);
 
         if ((main.depthTextureMode & DepthTextureMode.MotionVectors) == 0)
