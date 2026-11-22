@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.41";
+    public const string Version = "0.2.42";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -169,6 +169,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
+        FpanoLensProbe.Update();
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
         {
@@ -211,7 +212,11 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     private void LateUpdate() => EnvgFusion.SetWhitePhosphor();
 
     // every plugin's assembly is loaded by now: K-3PS-C's eyepieces, if it is there
-    private void Start() => EyepieceLink.Bind();
+    private void Start()
+    {
+        EyepieceLink.Bind();
+        FpanoLensProbe.Start();
+    }
 }
 
 internal static class EnvgFusion
