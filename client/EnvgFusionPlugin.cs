@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.49";
+    public const string Version = "0.2.50";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1928,7 +1928,9 @@ internal static class EnvgFusion
             EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: sight " + root.name + ": " + (_glass.Count > glassBefore ? (_glass.Count - glassBefore) + " glass part(s): " + names : "no glass found"));
     }
 
-    private static void DrawGlass(CommandBuffer cb, RenderTexture picture, RenderTexture normals, RenderTexture albedo, RenderTexture specular, RenderTexture depth)
+    private static readonly int GlassBehindId = Shader.PropertyToID("_FpanoGlassBehind");
+    private static RenderTexture? _holeMask;
+    private static void DrawGlass(CommandBuffer cb, RenderTexture depth, Vector2 jitter)
     {
         if (_glassMaterial == null && !_glassTried)
         {
@@ -1937,10 +1939,13 @@ internal static class EnvgFusion
             if (shader != null && shader.isSupported)
                 _glassMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
             else
-                EnvgFusionPlugin.Log?.LogWarning("F-PANO: the glass shader is missing: sights' glass is not a surface in the thermal picture");
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO: the glass shader is missing: no hole in the thermal picture through the sights");
         }
         if (_glassMaterial == null)
+        {
+            Shader.SetGlobalVector(LensMaskOnId, Vector4.zero);
             return;
+        }
         GameObject? gun = null;
         try { gun = Wearer?.HandsController?.ControllerGameObject; } catch (System.Exception) { }
         bool stale = GlassDirty || gun != _glassGun;
@@ -1954,7 +1959,7 @@ internal static class EnvgFusion
             _glass.Clear();
             _housing.Clear();
             // the red dots and holographic sights the game has enabled near the lens (the ones it shows), and a scope's lens
-            // (the one the game aims through); the gun's own as well
+            // (the one the game aims through); the gun's own if none of those
             Vector3 lensAt = _lensCam != null ? _lensCam.transform.position : Vector3.zero;
             foreach (CollimatorSight collimator in _enabledSights)
                 if (collimator != null && (collimator.transform.position - lensAt).sqrMagnitude < SightReach * SightReach)
@@ -1982,102 +1987,42 @@ internal static class EnvgFusion
             if (!targets)
             {
                 targets = true;
-                _glassTargets[0] = picture; _glassTargets[1] = normals; _glassTargets[2] = albedo; _glassTargets[3] = specular; _glassTargets[4] = depth;
+                if (_holeMask == null || _holeMask.width != depth.width || _holeMask.height != depth.height)
+                {
+                    if (_holeMask != null)
+                    {
+                        _holeMask.Release();
+                        Object.Destroy(_holeMask);
+                    }
+                    _holeMask = new RenderTexture(depth.width, depth.height, 0, RenderTextureFormat.R8) { name = "Justachae F-PANO sights' hole", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+                    _holeMask.Create();
+                }
                 cb.GetTemporaryRT(GlassDepthId, depth.width, depth.height, 24, FilterMode.Point, RenderTextureFormat.Depth);
-                cb.SetRenderTarget(_glassTargets, GlassDepthId);
-                cb.ClearRenderTarget(true, false, Color.clear);
-                // the housings first, their depth only
+                cb.SetRenderTarget(_holeMask, GlassDepthId);
+                cb.ClearRenderTarget(true, true, Color.clear);
+                cb.SetGlobalTexture(GlassBehindId, depth);
+                // the housings first, their depth only: what stands in front of the glass as the lens sees it
                 foreach (GlassPart h in _housing)
                     if (h.Renderer != null && h.Renderer.gameObject.activeInHierarchy && h.Renderer.enabled)
                         cb.DrawRenderer(h.Renderer, _glassMaterial, h.Sub, 1);
             }
-            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 0);
+            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
             drawn++;
         }
         if (targets)
+        {
             cb.ReleaseTemporaryRT(GlassDepthId);
-        if (_glassProbeAt >= 0 && Time.frameCount > _glassProbeFrame)
-            ReadGlassProbe(depth, albedo);
-        if (drawn > 0 && !_glassProbed && _lensCam != null)
-            ProbeGlass(depth);
+            cb.SetGlobalTexture(LensMaskId, _holeMask);
+            // (in the thermal picture's own uv, read where this frame's jitter put it)
+            Shader.SetGlobalVector(LensMaskOnId, new Vector4(1f, jitter.x, jitter.y, 1f));
+        }
+        else
+            Shader.SetGlobalVector(LensMaskOnId, Vector4.zero);
         if (drawn != _loggedGlass)
         {
             _loggedGlass = drawn;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " glass part(s) of the gun's sights drawn as surfaces about the air's warmth (" + _housing.Count + " housing parts in front kept)");
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " glass part(s) of the sights cut a hole in the thermal picture where the line goes on out through them (" + _housing.Count + " housing parts in front kept)");
         }
-    }
-
-    // TEMPORARY evidence (to be taken out once read): each glass part, where it is from the lens and on its picture, and
-    // what the thermal copies hold there a frame later (the glass's distance and colour 0, if it is drawn)
-    private static bool _glassProbed;
-    private static int _glassProbeAt = -1, _glassProbeFrame;
-    private static Vector3 _glassProbeUv;
-    private static void ProbeGlass(RenderTexture depth)
-    {
-        _glassProbed = true;
-        Camera cam = _lensCam!;
-        Vector3 at = cam.transform.position;
-        var line = new System.Text.StringBuilder("F-PANO GLASS PROBE: lens at " + at.ToString("F3") + ", eye at " + (_main != null ? _main.transform.position.ToString("F3") : "-") + ";");
-        GameObject? gunNow = null;
-        try { gunNow = Wearer?.HandsController?.ControllerGameObject; } catch (System.Exception) { }
-        line.Append(" gun ").Append(gunNow != null ? gunNow.name + " at " + (gunNow.transform.position - at).magnitude.ToString("F3") + " m" : "none").Append(";");
-        foreach (CollimatorSight sight in _enabledSights)
-            if (sight != null)
-                line.Append(" enabled sight ").Append(sight.transform.root.name).Append("/").Append(sight.name).Append(" at ").Append((sight.transform.position - at).magnitude.ToString("F3")).Append(" m view ")
-                    .Append(cam.WorldToViewportPoint(sight.transform.position).ToString("F2")).Append(";");
-        Vector3 probeUv = Vector3.zero;
-        bool have = false;
-        foreach (GlassPart p in _glass)
-        {
-            Renderer r = p.Renderer;
-            if (r == null)
-                continue;
-            Vector3 c = r.bounds.center;
-            Vector3 vp = cam.WorldToViewportPoint(c);
-            Material? m = p.Sub < r.sharedMaterials.Length ? r.sharedMaterials[p.Sub] : null;
-            line.Append(" | ").Append(r.name).Append(" sub ").Append(p.Sub).Append(" queue ").Append(m != null ? m.renderQueue : -1)
-                .Append(" enabled ").Append(r.enabled).Append(" active ").Append(r.gameObject.activeInHierarchy)
-                .Append(" at ").Append((c - at).magnitude.ToString("F3")).Append(" m, view ").Append(vp.x.ToString("F3")).Append(",").Append(vp.y.ToString("F3"))
-                .Append(" size ").Append((r.bounds.size * 1000f).ToString("F0")).Append(" mm");
-            if (!have && vp.z > 0f && vp.x > 0.02f && vp.x < 0.98f && vp.y > 0.02f && vp.y < 0.98f && r.gameObject.activeInHierarchy)
-            {
-                have = true;
-                probeUv = vp;
-            }
-        }
-        foreach (GlassPart h in _housing)
-            if (h.Renderer != null && line.Length < 3000)
-            {
-                Material? m = h.Sub < h.Renderer.sharedMaterials.Length ? h.Renderer.sharedMaterials[h.Sub] : null;
-                line.Append(" | housing ").Append(h.Renderer.name).Append(" [").Append(m != null ? m.name : "-").Append(" ").Append(m != null ? m.renderQueue : -1).Append("]");
-            }
-        EnvgFusionPlugin.Log?.LogInfo(line.ToString());
-        if (!have || !SystemInfo.supportsAsyncGPUReadback)
-            return;
-        // (read a frame later: this frame's copies are made when the lens camera renders)
-        _glassProbeUv = probeUv;
-        _glassProbeAt = 1;
-        _glassProbeFrame = Time.frameCount;
-    }
-
-    private static void ReadGlassProbe(RenderTexture depth, RenderTexture albedo)
-    {
-        _glassProbeAt = -1;
-        Vector3 probeUv = _glassProbeUv;
-        int x = Mathf.Clamp((int)(probeUv.x * depth.width), 0, depth.width - 1), y = Mathf.Clamp((int)(probeUv.y * depth.height), 0, depth.height - 1);
-        float expected = probeUv.z;
-        AsyncGPUReadback.Request(depth, 0, x, 1, y, 1, 0, 1, TextureFormat.RGFloat, request =>
-        {
-            if (request.hasError) { EnvgFusionPlugin.Log?.LogInfo("F-PANO GLASS PROBE: depth readback failed"); return; }
-            var d = request.GetData<float>();
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO GLASS PROBE: the depth copy at the first glass part's centre (" + x + "," + y + ") holds " + d[0].ToString("F3") + " m; the glass is " + expected.ToString("F3") + " m from the lens");
-        });
-        AsyncGPUReadback.Request(albedo, 0, x, 1, y, 1, 0, 1, TextureFormat.RGBA32, request =>
-        {
-            if (request.hasError) return;
-            var a = request.GetData<byte>();
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO GLASS PROBE: the colour copy there holds " + a[0] + "," + a[1] + "," + a[2] + " (0 if the glass is drawn)");
-        });
     }
 
     private static void FreeLens()
@@ -2118,10 +2063,7 @@ internal static class EnvgFusion
         _mainCopy.Blit(normals, depth, Material, 12);
         DrawBodies(_mainCopy);
         if (lens)
-        {
-            Shader.SetGlobalVector(LensMaskOnId, Vector4.zero);
-            DrawGlass(_mainCopy, picture, normals, albedo, specular, depth);
-        }
+            DrawGlass(_mainCopy, depth, jitter);
         else
             DrawScopeLens(_mainCopy, source, jitter, lens);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);

@@ -67,5 +67,37 @@ Shader "Justachae/FPANO/GlassSurface"
             float4 frag() : SV_Target { return 0; }
             ENDCG
         }
+
+        // 2: the hole in the thermal picture (the user's, 2026-11-14): where the line from the thermal lens through a
+        // sight's glass goes on out through its objective end to the scene (more than 20 cm behind the glass), the
+        // thermal picture is cut and the tubes' picture alone shows; where it meets the sight's own hood or tube inside
+        // (nearer), the thermal picture stays. Over the depth the lens camera saw with no glass (its copy).
+        Pass
+        {
+            ZWrite Off
+            ZTest LEqual
+            Cull Off
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            sampler2D _FpanoGlassBehind;   // the lens camera's linear depth (m), at the mask's own size and place
+            struct v2f { float4 pos : SV_POSITION; float4 sp : TEXCOORD0; float depth : TEXCOORD1; };
+            v2f vert(float4 vertex : POSITION)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(vertex);
+                o.sp = ComputeScreenPos(o.pos);
+                o.depth = -UnityObjectToViewPos(vertex.xyz).z;
+                return o;
+            }
+            float4 frag(v2f i) : SV_Target
+            {
+                float behind = tex2D(_FpanoGlassBehind, i.sp.xy / i.sp.w).r;
+                // (nothing behind it at all reads 0: the sky, far)
+                return behind <= 0.0 || behind - i.depth > 0.2 ? 1 : 0;
+            }
+            ENDCG
+        }
     }
 }
