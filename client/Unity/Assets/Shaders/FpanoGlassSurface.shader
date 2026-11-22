@@ -78,23 +78,30 @@ Shader "Justachae/FPANO/GlassSurface"
         //    ray (the same pixel, 20 cm deeper): 0 where the housing lies nearer than that (its hood or tube inside).
         //    The gun's own parts beyond the sight (a front sight, a rail) are not its housing: the hole goes on over them
         //    (user: "瞄具区域里面能看到枪自己的热融合").
+        // 2 (in use since 0.2.59): against the lens camera's own depth buffer (as 0.2.52, which the user called right),
+        // the glass pushed on along each pixel's ray (the same pixel, deeper) to just past its own sight's far end
+        // (_FpanoSightFar, view depth; 0: 20 cm on, as 0.2.52): it passes only where nothing opaque lies between the glass
+        // and there. In front of the glass (a hand, a helmet) or the sight's own hood or tube inside: no hole. The gun's
+        // own parts beyond the sight: hole.
         Pass
         {
             ZWrite Off
-            ZTest Greater
+            ZTest LEqual
             Cull Off
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
+            float _FpanoSightFar;
             float4 vert(float4 vertex : POSITION) : SV_POSITION
             {
                 float3 v = UnityObjectToViewPos(vertex.xyz);
                 float d = max(-v.z, 1e-4);
-                v *= (d + 0.2) / d;                       // along the ray: the same pixel, 20 cm deeper
+                float to = _FpanoSightFar > 0.0 ? max(_FpanoSightFar, d + 0.02) : d + 0.2;
+                v *= to / d;
                 return mul(UNITY_MATRIX_P, float4(v, 1.0));
             }
-            float4 frag() : SV_Target { return 0; }
+            float4 frag() : SV_Target { return 1; }
             ENDCG
         }
 

@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.58";
+    public const string Version = "0.2.59";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1862,7 +1862,10 @@ internal static class EnvgFusion
     {
         public Renderer Renderer;
         public int Sub;
+        public int Sight;   // which sight it belongs to (its own housing gives where that sight ends)
     }
+    private static int _sightCount;
+    private static readonly List<float> _sightFar = new List<float>();
     private static Material? _glassMaterial;
     private static bool _glassTried;
     private static readonly List<GlassPart> _glass = new List<GlassPart>(), _housing = new List<GlassPart>();
@@ -1890,6 +1893,8 @@ internal static class EnvgFusion
         return a.IndexOf("linza", System.StringComparison.OrdinalIgnoreCase) >= 0 || b.IndexOf("linza", System.StringComparison.OrdinalIgnoreCase) >= 0
             || a.IndexOf("lens", System.StringComparison.OrdinalIgnoreCase) >= 0 || b.IndexOf("lens", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
+    private static readonly int SightFarId = Shader.PropertyToID("_FpanoSightFar");
+    private static int _holeCheck;
     private static void CollectSight(Transform sight, Renderer? skip, Renderer? lens)
     {
         Transform root = sight;
@@ -1951,17 +1956,18 @@ internal static class EnvgFusion
                 }
                 if (r != lens && m.renderQueue <= 2500)
                 {
-                    _housing.Add(new GlassPart { Renderer = r, Sub = sub });
+                    _housing.Add(new GlassPart { Renderer = r, Sub = sub, Sight = _sightCount });
                     if (housingNames.Length < 600)
                         housingNames.Append(r.name).Append(r.gameObject.activeInHierarchy && r.enabled ? "" : " (off)").Append(" [").Append(m.name).Append("] ");
                     continue;
                 }
-                _glass.Add(new GlassPart { Renderer = r, Sub = sub });
+                _glass.Add(new GlassPart { Renderer = r, Sub = sub, Sight = _sightCount });
                 if (names.Length < 300)
                     names.Append(r.name).Append(" [").Append(m.name).Append("] ");
             }
         }
         _sightRenderers.Clear();
+        _sightCount++;
         if (_loggedSights.Add(root.name))
             EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: sight " + root.name + ": " + (_glass.Count > glassBefore ? (_glass.Count - glassBefore) + " glass part(s): " + names : "no glass found")
                 + "; " + (_housing.Count - housingBefore) + " housing part(s): " + housingNames + "; " + lowLod + " lower-detail renderer(s), " + lensFaces + " opaque lens face(s) left out");
@@ -1997,6 +2003,8 @@ internal static class EnvgFusion
             _glassGun = gun;
             _glass.Clear();
             _housing.Clear();
+            _sightCount = 0;
+            _holeCheck = 3;
             // the red dots and holographic sights the game has enabled near the lens (the ones it shows), and a scope's lens
             // (the one the game aims through); the gun's own if none of those
             Vector3 lensAt = _lensCam != null ? _lensCam.transform.position : Vector3.zero;
@@ -2017,6 +2025,22 @@ internal static class EnvgFusion
                         CollectSight(optic.transform, null, optic.LensRenderer);
             }
         }
+        // where each sight ends as the lens sees it: the farthest corner of its own housing's boxes, along the lens's view
+        _sightFar.Clear();
+        for (int s = 0; s < _sightCount; s++)
+            _sightFar.Add(0f);
+        Transform? lensT = _lensCam != null ? _lensCam.transform : null;
+        if (lensT != null)
+            foreach (GlassPart h in _housing)
+            {
+                if (h.Renderer == null || !h.Renderer.gameObject.activeInHierarchy || !h.Renderer.enabled || h.Sight >= _sightFar.Count)
+                    continue;
+                Bounds b = h.Renderer.bounds;
+                Vector3 c = b.center - lensT.position, e = b.extents, f = lensT.forward;
+                float far = Vector3.Dot(c, f) + Mathf.Abs(e.x * f.x) + Mathf.Abs(e.y * f.y) + Mathf.Abs(e.z * f.z);
+                if (far > _sightFar[h.Sight])
+                    _sightFar[h.Sight] = far;
+            }
         int drawn = 0;
         bool targets = false;
         foreach (GlassPart p in _glass)
@@ -2026,7 +2050,7 @@ internal static class EnvgFusion
             if (!targets)
             {
                 targets = true;
-                // (at the lens camera's own size: its depth is read there, and the edge stays sharp)
+                // (at the lens camera's own size: its depth buffer is drawn against, and the edge stays sharp)
                 int mw = _lensTarget != null ? _lensTarget.width : depth.width, mh = _lensTarget != null ? _lensTarget.height : depth.height;
                 if (_holeMask == null || _holeMask.width != mw || _holeMask.height != mh)
                 {
@@ -2038,27 +2062,37 @@ internal static class EnvgFusion
                     _holeMask = new RenderTexture(mw, mh, 0, RenderTextureFormat.R8) { name = "Justachae F-PANO sights' hole", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
                     _holeMask.Create();
                 }
-                // first the glass seen at all, over the lens camera's own depth buffer (this runs while it renders,
-                // before its transparent things: the glass is not in it, everything in front of it is)
+                // over the lens camera's own depth buffer (this runs while it renders, before its transparent things:
+                // the glass is not in it, everything opaque is), as 0.2.52 had it (user: "这回对了")
                 cb.SetRenderTarget(_holeMask, BuiltinRenderTextureType.CameraTarget);
                 cb.ClearRenderTarget(false, true, Color.clear);
             }
-            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 3);
+            // each glass pushed on along its rays to 1 cm past its own sight's far end (at least 2 cm): the hole where the
+            // line leaves the sight with nothing opaque in between; its hood's or tube's inside keeps the thermal picture,
+            // the gun's own parts beyond the sight do not (user: "瞄具区域里面能看到枪自己的热融合")
+            float sightFar = p.Sight < _sightFar.Count ? _sightFar[p.Sight] : 0f;
+            cb.SetGlobalFloat(SightFarId, sightFar > 0f ? sightFar + 0.01f : 0f);
+            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
             drawn++;
         }
         if (targets)
         {
-            // then the sights' own housings alone: where one lies within 20 cm behind the glass, no hole
-            cb.GetTemporaryRT(GlassDepthId, _holeMask!.width, _holeMask.height, 24, FilterMode.Point, RenderTextureFormat.Depth);
-            cb.SetRenderTarget(_holeMask, GlassDepthId);
-            cb.ClearRenderTarget(true, false, Color.clear);
-            foreach (GlassPart h in _housing)
-                if (h.Renderer != null && h.Renderer.gameObject.activeInHierarchy && h.Renderer.enabled)
-                    cb.DrawRenderer(h.Renderer, _glassMaterial, h.Sub, 1);
-            foreach (GlassPart p in _glass)
-                if (p.Renderer != null && p.Renderer.gameObject.activeInHierarchy)
-                    cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
-            cb.ReleaseTemporaryRT(GlassDepthId);
+            if (_holeCheck > 0 && _holeMask != null && SystemInfo.supportsAsyncGPUReadback)
+            {
+                _holeCheck--;
+                int w0 = _holeMask.width, h0 = _holeMask.height;
+                string far0 = string.Join(", ", System.Linq.Enumerable.Select(_sightFar, x => x.ToString("F3")));
+                cb.RequestAsyncReadback(_holeMask, r =>
+                {
+                    if (r.hasError)
+                        return;
+                    var data = r.GetData<byte>();
+                    int n = 0;
+                    for (int k = 0; k < data.Length; k++)
+                        if (data[k] > 127) n++;
+                    EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: the sights' hole is " + n + " of " + (w0 * h0) + " pixels (sights end at " + far0 + " m from the lens)");
+                });
+            }
             cb.SetGlobalTexture(LensMaskId, _holeMask);
             cb.SetGlobalVector(LensMaskTexelId, new Vector4(1f / _holeMask.width, 1f / _holeMask.height, _holeMask.width, _holeMask.height));
             // (in the thermal picture's own uv, read where this frame's jitter put it)
