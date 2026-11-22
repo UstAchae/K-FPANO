@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.60";
+    public const string Version = "0.2.61";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -173,6 +173,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
+        FpanoCost.Update();
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
         {
@@ -215,7 +216,11 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     private void LateUpdate() => EnvgFusion.SetWhitePhosphor();
 
     // every plugin's assembly is loaded by now: K-3PS-C's eyepieces, if it is there
-    private void Start() => EyepieceLink.Bind();
+    private void Start()
+    {
+        EyepieceLink.Bind();
+        FpanoCost.Start();
+    }
 }
 
 internal static class EnvgFusion
@@ -654,7 +659,7 @@ internal static class EnvgFusion
                 _tubeFrame = Time.frameCount;
                 MeasureBrightness(_main);
             }
-            if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
+            if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
                 return;
             Graphics.ExecuteCommandBuffer(_overlayDraw);
             RequestHistogram();
@@ -720,7 +725,7 @@ internal static class EnvgFusion
             return false;
         string show = EnvgFusionPlugin.Show?.Value ?? EnvgFusionPlugin.ShowOutline;
         // (the right pod swung up: its tube, the thermal module with it, is off)
-        if (show == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
+        if (show == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
             return false;
         if (_fusedFrame != Time.frameCount)
         {
@@ -1290,7 +1295,7 @@ internal static class EnvgFusion
             _mainCopy.Clear();
         if (!Active || camera != _main || _main == null || Material == null)
             return;
-        if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
+        if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
         {
             _mainCopy?.Clear();
             _motionCopy?.Clear();
@@ -1380,7 +1385,9 @@ internal static class EnvgFusion
             Matrix4x4 unjittered = main.nonJitteredProjectionMatrix;
             Matrix4x4 drawn = main.projectionMatrix;
             // the thermal lens's own camera (the real way), or the main camera's frame
-            Camera? lensCam = EnvgFusionPlugin.FromLens?.Value == true ? PlaceLens(main, unjittered, fineWidth, fineHeight, out drawn, out unjittered) : null;
+            Camera? lensCam = EnvgFusionPlugin.FromLens?.Value == true && !FpanoCost.LensOff ? PlaceLens(main, unjittered, fineWidth, fineHeight, out drawn, out unjittered) : null;
+            if (lensCam == null)
+                _lensActive = false;
             Camera source = lensCam != null ? lensCam : main;
             Matrix4x4 worldToCam = source.worldToCameraMatrix;
             _camToWorld = worldToCam.inverse;
