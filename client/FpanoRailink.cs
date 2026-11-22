@@ -795,6 +795,7 @@ internal static class FpanoRailink
         {
             if (item == null || itemView == null)
                 return;
+            EnvgFusion.GlassDirty = true;
             if (FpanoStrobe.IsStrobe(item))
                 FpanoStrobe.Attach(itemView, item);
             else if (FpanoLamp.IsLamp(item))

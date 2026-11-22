@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.44";
+    public const string Version = "0.2.45";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1660,6 +1660,7 @@ internal static class EnvgFusion
     private static float _lensSearchAt = -10f;
     private static int _lensJitter;
     private static bool _loggedLens, _loggedLensGrass;
+    private static int _loggedLensSearch;
     private static Camera? _motionCamera;
     private static int _lensGrassDraws;
     internal static bool LensWanted => EnvgFusionPlugin.FromLens?.Value == true;
@@ -1679,7 +1680,7 @@ internal static class EnvgFusion
     // second while it is not found)
     private static Transform? LensNode()
     {
-        if (_lensNode != null && ReferenceEquals(_lensItem, WornDevice) && _lensNode.gameObject.activeInHierarchy)
+        if (_lensNode != null && ReferenceEquals(_lensItem, WornDevice))
             return _lensNode;
         if (Time.unscaledTime - _lensSearchAt < 1f && ReferenceEquals(_lensItem, WornDevice))
             return null;
@@ -1690,15 +1691,22 @@ internal static class EnvgFusion
             return null;
         _lensQueue.Clear();
         _lensQueue.Add(Wearer.gameObject.transform);
+        // (the node is a marker, without a renderer: it may sit under an object the eyepieces hide; its place is kept)
+        int devices = 0, searched = 0;
         for (int i = 0; i < _lensQueue.Count && _lensNode == null; i++)
         {
             Transform t = _lensQueue[i];
-            if (t.name == "fpano_thermal_lens" && t.gameObject.activeInHierarchy)
+            searched++;
+            if (t.name == "fpano_thermal_lens")
                 _lensNode = t;
+            else if (t.name.StartsWith("nvg_fpano", System.StringComparison.Ordinal))
+                devices++;
             for (int c = 0; c < t.childCount; c++)
                 _lensQueue.Add(t.GetChild(c));
         }
         _lensQueue.Clear();
+        if (_lensNode == null && _loggedLensSearch++ < 3)
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: no fpano_thermal_lens under " + Wearer.gameObject.name + " (" + searched + " nodes, " + devices + " nvg_fpano nodes)");
         return _lensNode;
     }
     private static readonly List<Transform> _lensQueue = new List<Transform>();
@@ -1832,6 +1840,83 @@ internal static class EnvgFusion
         }
     }
 
+    // ---- the sights' glass on the gun in the hands (scopes' lenses, red dots' and holographic sights' windows): long-wave
+    // infrared does not pass glass, so from the thermal lens each is a surface, drawn into the thermal copies (the game
+    // draws glass after the opaque scene, so it is not in them). Collected once per gun and again when something is put
+    // on a gun (Dirty) or one of them is gone ----
+    private static Material? _glassMaterial;
+    private static bool _glassTried;
+    private static readonly List<Renderer> _glass = new List<Renderer>();
+    private static GameObject? _glassGun;
+    internal static bool GlassDirty = true;
+    private static readonly int GlassDepthId = Shader.PropertyToID("_EnvgGlassDepth");
+    private static readonly RenderTargetIdentifier[] _glassTargets = new RenderTargetIdentifier[5];
+    private static int _loggedGlass = -1;
+    private static void DrawGlass(CommandBuffer cb, RenderTexture picture, RenderTexture normals, RenderTexture albedo, RenderTexture specular, RenderTexture depth)
+    {
+        if (_glassMaterial == null && !_glassTried)
+        {
+            _glassTried = true;
+            Shader? shader = BundleShader("Justachae/FPANO/GlassSurface");
+            if (shader != null && shader.isSupported)
+                _glassMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
+            else
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO: the glass shader is missing: sights' glass is not a surface in the thermal picture");
+        }
+        if (_glassMaterial == null)
+            return;
+        GameObject? gun = null;
+        try { gun = Wearer?.HandsController?.ControllerGameObject; } catch (System.Exception) { }
+        bool stale = GlassDirty || gun != _glassGun;
+        if (!stale)
+            foreach (Renderer r in _glass)
+                if (r == null) { stale = true; break; }
+        if (stale)
+        {
+            GlassDirty = false;
+            _glassGun = gun;
+            _glass.Clear();
+            if (gun != null)
+            {
+                foreach (OpticSight optic in gun.GetComponentsInChildren<OpticSight>(true))
+                    if (optic != null && optic.LensRenderer != null)
+                        _glass.Add(optic.LensRenderer);
+                foreach (CollimatorSight collimator in gun.GetComponentsInChildren<CollimatorSight>(true))
+                {
+                    Renderer? r = collimator != null ? (collimator.CollimatorMeshRenderer != null ? collimator.CollimatorMeshRenderer : collimator.GetComponent<MeshRenderer>()) : null;
+                    if (r != null)
+                        _glass.Add(r);
+                }
+            }
+        }
+        int drawn = 0;
+        bool targets = false;
+        foreach (Renderer r in _glass)
+        {
+            if (r == null || !r.gameObject.activeInHierarchy)
+                continue;
+            if (!targets)
+            {
+                targets = true;
+                _glassTargets[0] = picture; _glassTargets[1] = normals; _glassTargets[2] = albedo; _glassTargets[3] = specular; _glassTargets[4] = depth;
+                cb.GetTemporaryRT(GlassDepthId, depth.width, depth.height, 24, FilterMode.Point, RenderTextureFormat.Depth);
+                cb.SetRenderTarget(_glassTargets, GlassDepthId);
+                cb.ClearRenderTarget(true, false, Color.clear);
+            }
+            int subs = r is MeshRenderer && r.TryGetComponent(out MeshFilter f) && f.sharedMesh != null ? f.sharedMesh.subMeshCount : 1;
+            for (int s = 0; s < subs; s++)
+                cb.DrawRenderer(r, _glassMaterial, s, 0);
+            drawn++;
+        }
+        if (targets)
+            cb.ReleaseTemporaryRT(GlassDepthId);
+        if (drawn != _loggedGlass)
+        {
+            _loggedGlass = drawn;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " sight glass(es) of " + _glass.Count + " on the gun drawn as surfaces (long-wave infrared does not pass glass)");
+        }
+    }
+
     private static void FreeLens()
     {
         if (_lensCam != null)
@@ -1869,7 +1954,13 @@ internal static class EnvgFusion
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer1, specular, Material, 25);
         _mainCopy.Blit(normals, depth, Material, 12);
         DrawBodies(_mainCopy);
-        DrawScopeLens(_mainCopy, source, jitter, lens);
+        if (lens)
+        {
+            Shader.SetGlobalVector(LensMaskOnId, Vector4.zero);
+            DrawGlass(_mainCopy, picture, normals, albedo, specular, depth);
+        }
+        else
+            DrawScopeLens(_mainCopy, source, jitter, lens);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);
         _mainCopy.SetGlobalVector(SrcCropId, Vector4.zero);
 
