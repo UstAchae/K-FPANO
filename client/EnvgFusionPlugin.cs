@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.55";
+    public const string Version = "0.2.56";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1886,18 +1886,46 @@ internal static class EnvgFusion
     private const float SightReach = 0.6f;   // a sight on the gun in the hands is within this of the lens
 
     // one sight's glass and housing onto the lists (skip: the game's reticle quad; lens: a scope's lens, always glass)
+    private static readonly List<LODGroup> _lodGroups = new List<LODGroup>();
+    private static readonly HashSet<Renderer> _lowLod = new HashSet<Renderer>();
+    private static readonly int LensMaskTexelId = Shader.PropertyToID("_EnvgLensMask_TexelSize");
     private static void CollectSight(Transform sight, Renderer? skip, Renderer? lens)
     {
         Transform root = sight;
         for (int k = 0; k < 12 && root.parent != null && !IsSlot(root.parent); k++)
             root = root.parent;
-        int glassBefore = _glass.Count;
+        int glassBefore = _glass.Count, housingBefore = _housing.Count, lowLod = 0;
         var names = new System.Text.StringBuilder();
+        var housingNames = new System.Text.StringBuilder();
+        // the lower levels of detail are left out: drawn by hand they would all show at once, and a far level's window is
+        // often an opaque face (0.2.55: it stood as the sight's own housing across the whole window, and the hole was gone)
+        _lowLod.Clear();
+        root.GetComponentsInChildren(true, _lodGroups);
+        foreach (LODGroup g in _lodGroups)
+        {
+            if (g == null)
+                continue;
+            LOD[] lods = g.GetLODs();
+            for (int l = 1; l < lods.Length; l++)
+                foreach (Renderer lr in lods[l].renderers)
+                    if (lr != null)
+                        _lowLod.Add(lr);
+            if (lods.Length > 0)
+                foreach (Renderer lr in lods[0].renderers)
+                    if (lr != null)
+                        _lowLod.Remove(lr);
+        }
+        _lodGroups.Clear();
         root.GetComponentsInChildren(true, _sightRenderers);
         foreach (Renderer r in _sightRenderers)
         {
             if (r == null || r == skip || r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer)
                 continue;
+            if (r != lens && _lowLod.Contains(r))
+            {
+                lowLod++;
+                continue;
+            }
             bool inOtherSlot = false;
             for (Transform? t = r.transform; t != null && t != root; t = t.parent)
                 if (IsSlot(t))
@@ -1916,6 +1944,8 @@ internal static class EnvgFusion
                 if (r != lens && m.renderQueue <= 2500)
                 {
                     _housing.Add(new GlassPart { Renderer = r, Sub = sub });
+                    if (housingNames.Length < 600)
+                        housingNames.Append(r.name).Append(r.gameObject.activeInHierarchy && r.enabled ? "" : " (off)").Append(" [").Append(m.name).Append("] ");
                     continue;
                 }
                 _glass.Add(new GlassPart { Renderer = r, Sub = sub });
@@ -1925,7 +1955,8 @@ internal static class EnvgFusion
         }
         _sightRenderers.Clear();
         if (_loggedSights.Add(root.name))
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: sight " + root.name + ": " + (_glass.Count > glassBefore ? (_glass.Count - glassBefore) + " glass part(s): " + names : "no glass found"));
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: sight " + root.name + ": " + (_glass.Count > glassBefore ? (_glass.Count - glassBefore) + " glass part(s): " + names : "no glass found")
+                + "; " + (_housing.Count - housingBefore) + " housing part(s): " + housingNames + "; " + lowLod + " lower-detail renderer(s) left out");
     }
 
     private static readonly int GlassBehindId = Shader.PropertyToID("_FpanoGlassBehind");
@@ -2021,6 +2052,7 @@ internal static class EnvgFusion
                     cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
             cb.ReleaseTemporaryRT(GlassDepthId);
             cb.SetGlobalTexture(LensMaskId, _holeMask);
+            cb.SetGlobalVector(LensMaskTexelId, new Vector4(1f / _holeMask.width, 1f / _holeMask.height, _holeMask.width, _holeMask.height));
             // (in the thermal picture's own uv, read where this frame's jitter put it)
             Shader.SetGlobalVector(LensMaskOnId, new Vector4(1f, jitter.x, jitter.y, 1f));
         }
