@@ -81,13 +81,13 @@ This is a test version: the mod is still being tested in game, and things may ch
 
 ## 模型来源
 
-- **F-PANO**：3D Military Assets（3DMA）的 "NVG L3Harris FPGPNVG" 模型（https://www.3dmilitaryassets.com）。
-- **RAILINK、HL2-A、MPLS、HEL-STAR 频闪灯**：3D Military Assets（3DMA）的 "Helmet Ops-Core RAILINK" 模型。
+- **F-PANO**：3D Military Assets（3DMA）的 L3Harris F-PANO NVGs 模型：https://www.3dmilitaryassets.com/en-gb/products/l3-harris-f-pano-nvgs
+- **RAILINK、HL2-A、MPLS、HEL-STAR 频闪灯**：3D Military Assets（3DMA）的 Ops-Core RAILINK Data ARC Rail System 模型：https://www.3dmilitaryassets.com/en-gb/products/opscore-railink-data-arc-rail-system
 - **RAC、ComTac V/VI 耳机**：游戏自带的模型，本模组只是把它们的形状调整到 RAILINK 导轨上。
 
 模型按 3DMA 的授权用于免费模组，只以游戏资源包的形式发布，不包含原始模型文件。感谢 3D Military Assets。
 
-Models: 3D Military Assets (3DMA), "NVG L3Harris FPGPNVG" and "Helmet Ops-Core RAILINK"; the RAC and ComTac headsets are the game's own. Used under 3DMA's licence for free mods, shipped only as game bundles; the source models are not included.
+Models: 3D Military Assets (3DMA), L3Harris F-PANO NVGs and Ops-Core RAILINK Data ARC Rail System (links above); the RAC and ComTac headsets are the game's own. Used under 3DMA's licence for free mods, shipped only as game bundles; the source models are not included.
 
 ## 安装
 
