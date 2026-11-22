@@ -79,6 +79,16 @@ This is a test version: the mod is still being tested in game, and things may ch
 - 瞄具会在热像上挖洞：从物镜看过去，视线穿过红点、全息或倍镜的玻璃、从瞄具前端穿出去的地方，只显示夜视画面；瞄具自己的罩子和镜筒内壁保留热像，挡在瞄具前面的手、头盔也保留自己的热像。
 - 枪和手只用当前一帧的热像，晃枪时不会拖影。
 
+## 模型来源
+
+- **F-PANO**：3D Military Assets（3DMA）的 "NVG L3Harris FPGPNVG" 模型（https://www.3dmilitaryassets.com）。
+- **RAILINK、HL2-A、MPLS、HEL-STAR 频闪灯**：3D Military Assets（3DMA）的 "Helmet Ops-Core RAILINK" 模型。
+- **RAC、ComTac V/VI 耳机**：游戏自带的模型，本模组只是把它们的形状调整到 RAILINK 导轨上。
+
+模型按 3DMA 的授权用于免费模组，只以游戏资源包的形式发布，不包含原始模型文件。感谢 3D Military Assets。
+
+Models: 3D Military Assets (3DMA), "NVG L3Harris FPGPNVG" and "Helmet Ops-Core RAILINK"; the RAC and ComTac headsets are the game's own. Used under 3DMA's licence for free mods, shipped only as game bundles; the source models are not included.
+
 ## 安装
 
 把发布的压缩包解压到 SPT 文件夹，会得到 `SPT_Runtime/user/mods/UstAchae-FPANO`（服务端）和 `BepInEx/plugins/JustachaeFPANO`（客户端）。
@@ -97,4 +107,4 @@ With K-3PS-C 1.9.0 beta 1 or later its eyepieces image the device and the therma
 - `client/` - BepInEx plugin (thermal fusion, RAILINK power, lights, headsets), `build/build.sh`.
 - `package.py` - the release zip from the built outputs (checks server and client carry one version).
 
-The purchased model sources are never committed. Model: 3DMA, NVG L3Harris FPGPNVG (credit to 3D Military Assets).
+The purchased model sources are never committed (see 模型来源 above).
