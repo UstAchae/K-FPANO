@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.57";
+    public const string Version = "0.2.58";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1884,12 +1884,18 @@ internal static class EnvgFusion
     private static readonly List<LODGroup> _lodGroups = new List<LODGroup>();
     private static readonly HashSet<Renderer> _lowLod = new HashSet<Renderer>();
     private static readonly int LensMaskTexelId = Shader.PropertyToID("_EnvgLensMask_TexelSize");
+    private static bool IsOptic(Renderer r, Material m)
+    {
+        string a = r.name, b = m.name;
+        return a.IndexOf("linza", System.StringComparison.OrdinalIgnoreCase) >= 0 || b.IndexOf("linza", System.StringComparison.OrdinalIgnoreCase) >= 0
+            || a.IndexOf("lens", System.StringComparison.OrdinalIgnoreCase) >= 0 || b.IndexOf("lens", System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
     private static void CollectSight(Transform sight, Renderer? skip, Renderer? lens)
     {
         Transform root = sight;
         for (int k = 0; k < 12 && root.parent != null && !IsSlot(root.parent); k++)
             root = root.parent;
-        int glassBefore = _glass.Count, housingBefore = _housing.Count, lowLod = 0;
+        int glassBefore = _glass.Count, housingBefore = _housing.Count, lowLod = 0, lensFaces = 0;
         var names = new System.Text.StringBuilder();
         var housingNames = new System.Text.StringBuilder();
         // the lower levels of detail are left out: drawn by hand they would all show at once, and a far level's window is
@@ -1936,6 +1942,13 @@ internal static class EnvgFusion
                 Material m = materials[sub];
                 if (m == null)
                     continue;
+                // a lens surface drawn opaque (the EOTech's "backLens" [back_linza], a scope's lens faces) is optics, not
+                // a wall: as housing it filled the window and the hole was gone (0.2.56, in the log)
+                if (r != lens && m.renderQueue <= 2500 && IsOptic(r, m))
+                {
+                    lensFaces++;
+                    continue;
+                }
                 if (r != lens && m.renderQueue <= 2500)
                 {
                     _housing.Add(new GlassPart { Renderer = r, Sub = sub });
@@ -1951,7 +1964,7 @@ internal static class EnvgFusion
         _sightRenderers.Clear();
         if (_loggedSights.Add(root.name))
             EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: sight " + root.name + ": " + (_glass.Count > glassBefore ? (_glass.Count - glassBefore) + " glass part(s): " + names : "no glass found")
-                + "; " + (_housing.Count - housingBefore) + " housing part(s): " + housingNames + "; " + lowLod + " lower-detail renderer(s) left out");
+                + "; " + (_housing.Count - housingBefore) + " housing part(s): " + housingNames + "; " + lowLod + " lower-detail renderer(s), " + lensFaces + " opaque lens face(s) left out");
     }
 
     private static readonly int GlassBehindId = Shader.PropertyToID("_FpanoGlassBehind");
