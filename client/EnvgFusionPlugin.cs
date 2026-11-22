@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.50";
+    public const string Version = "0.2.51";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1987,20 +1987,21 @@ internal static class EnvgFusion
             if (!targets)
             {
                 targets = true;
-                if (_holeMask == null || _holeMask.width != depth.width || _holeMask.height != depth.height)
+                // (at the lens camera's own size: its depth is read there, and the edge stays sharp)
+                int mw = _lensTarget != null ? _lensTarget.width : depth.width, mh = _lensTarget != null ? _lensTarget.height : depth.height;
+                if (_holeMask == null || _holeMask.width != mw || _holeMask.height != mh)
                 {
                     if (_holeMask != null)
                     {
                         _holeMask.Release();
                         Object.Destroy(_holeMask);
                     }
-                    _holeMask = new RenderTexture(depth.width, depth.height, 0, RenderTextureFormat.R8) { name = "Justachae F-PANO sights' hole", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+                    _holeMask = new RenderTexture(mw, mh, 0, RenderTextureFormat.R8) { name = "Justachae F-PANO sights' hole", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
                     _holeMask.Create();
                 }
-                cb.GetTemporaryRT(GlassDepthId, depth.width, depth.height, 24, FilterMode.Point, RenderTextureFormat.Depth);
+                cb.GetTemporaryRT(GlassDepthId, mw, mh, 24, FilterMode.Point, RenderTextureFormat.Depth);
                 cb.SetRenderTarget(_holeMask, GlassDepthId);
                 cb.ClearRenderTarget(true, true, Color.clear);
-                cb.SetGlobalTexture(GlassBehindId, depth);
                 // the housings first, their depth only: what stands in front of the glass as the lens sees it
                 foreach (GlassPart h in _housing)
                     if (h.Renderer != null && h.Renderer.gameObject.activeInHierarchy && h.Renderer.enabled)
