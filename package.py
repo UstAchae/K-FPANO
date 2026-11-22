@@ -9,6 +9,9 @@ import re, sys, zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+# a test release (user: "这几个模组都打上 BETA，说明还在测试阶段"): the zip is named <version>-beta.<n>; the version the game
+# reads stays plain numbers. 0 for a final release.
+BETA = 1
 SERVER_DIR, CLIENT_DIR = 'SPT_Runtime/user/mods/UstAchae-FPANO', 'BepInEx/plugins/JustachaeFPANO'
 
 server_ver = re.search(r'Version \{ get; init; \} = new\("([^"]+)"\)', (ROOT / 'server/src/FpanoMod.cs').read_text(encoding='utf8')).group(1)
@@ -31,7 +34,7 @@ for p, name in files.items():   # the built DLLs must carry the version
     if p.suffix == '.dll' and server_ver.encode('utf-16-le') not in p.read_bytes():
         sys.exit(f'{p.name} is not built as {server_ver}')
 
-out = ROOT / 'dist' / f'K-FPANO-{server_ver}.zip'
+out = ROOT / 'dist' / (f'K-FPANO-{server_ver}' + (f'-beta.{BETA}' if BETA else '') + '.zip')
 out.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
     for p, name in files.items():
