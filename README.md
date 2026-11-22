@@ -16,6 +16,14 @@ Conflicts: the RAILINK conflicts only with the GPNVG-18 and the K-ENVG-B goggles
 
 Unzip the release into the SPT folder: `SPT_Runtime/user/mods/UstAchae-FPANO` (server) and `BepInEx/plugins/JustachaeFPANO` (client). Works on its own; with K-3PS-C its eyepieces image the device.
 
+Works on its own (the thermal picture over the screen). With K-3PS-C 1.8.199 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube, sized and centred on what the eye sees of it.
+
+## Thermal picture
+
+- Drawn the real way: a second camera at the goggle's thermal objective (above the right inner tube) renders the scene at the sensor's resolution (16 px per degree), turned as the eye's view. Near things show where the objective sees them, so a gun's sight blocks the thermal picture lower than it blocks the eye; a scope's magnification never enlarges the thermal picture. About 1.5 ms a frame for that camera (measured in the hideout). F12 advanced: 热像从物镜位置拍 (on); off takes the picture from the eye's own camera.
+- Sights cut a hole in it: where the line from the objective through a red dot's, holographic sight's or scope's glass goes on out through the sight's objective end, only the tubes' picture shows; the sight's own hood and tube keep their heat, and a hand or helmet in front keeps its own.
+- The gun and the hands are drawn from the present frame only (no trail when the gun sways).
+
 ## Repository
 
 - `item/` - Blender export (`export_parts.py`), frames, seat on the helmet, flip hinge and figure-8 eyepiece glass (`prepare.py`), items split (`split_items.py`), RAILINK fits per helmet (`fit_*.py`), ComTac bakes (`bake_headsets.py`), Unity bundle build (`Unity/Assets/Editor/FpanoBuilder.cs`, icon checks `IconCheck*.cs`), game shader swap (`finalize.py`). `nodes.json` lists the prefab's nodes, the thermal lens marker and the eyepiece discs for the other mods.

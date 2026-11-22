@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.62";
+    public const string Version = "0.2.63";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -173,7 +173,6 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
         _ = EnvgFusion.EnvgbDown;   // (read first: it notes the worn device this frame)
-        FpanoCost.Update();
         // ← →: the device's modes (not while a menu, the inventory or the map has the cursor)
         if (EnvgFusion.Active && Show != null && !Cursor.visible)
         {
@@ -216,11 +215,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
     private void LateUpdate() => EnvgFusion.SetWhitePhosphor();
 
     // every plugin's assembly is loaded by now: K-3PS-C's eyepieces, if it is there
-    private void Start()
-    {
-        EyepieceLink.Bind();
-        FpanoCost.Start();
-    }
+    private void Start() => EyepieceLink.Bind();
 }
 
 internal static class EnvgFusion
@@ -659,7 +654,7 @@ internal static class EnvgFusion
                 _tubeFrame = Time.frameCount;
                 MeasureBrightness(_main);
             }
-            if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
+            if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
                 return;
             Graphics.ExecuteCommandBuffer(_overlayDraw);
             RequestHistogram();
@@ -725,7 +720,7 @@ internal static class EnvgFusion
             return false;
         string show = EnvgFusionPlugin.Show?.Value ?? EnvgFusionPlugin.ShowOutline;
         // (the right pod swung up: its tube, the thermal module with it, is off)
-        if (show == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
+        if (show == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
             return false;
         if (_fusedFrame != Time.frameCount)
         {
@@ -1295,7 +1290,7 @@ internal static class EnvgFusion
             _mainCopy.Clear();
         if (!Active || camera != _main || _main == null || Material == null)
             return;
-        if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f || FpanoCost.ThermalOff)
+        if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
         {
             _mainCopy?.Clear();
             _motionCopy?.Clear();
@@ -1385,7 +1380,7 @@ internal static class EnvgFusion
             Matrix4x4 unjittered = main.nonJitteredProjectionMatrix;
             Matrix4x4 drawn = main.projectionMatrix;
             // the thermal lens's own camera (the real way), or the main camera's frame
-            Camera? lensCam = EnvgFusionPlugin.FromLens?.Value == true && !FpanoCost.LensOff ? PlaceLens(main, unjittered, fineWidth, fineHeight, out drawn, out unjittered) : null;
+            Camera? lensCam = EnvgFusionPlugin.FromLens?.Value == true ? PlaceLens(main, unjittered, fineWidth, fineHeight, out drawn, out unjittered) : null;
             if (lensCam == null)
                 _lensActive = false;
             Camera source = lensCam != null ? lensCam : main;
@@ -1664,9 +1659,6 @@ internal static class EnvgFusion
     private const float LensNear = 0.03f;    // the goggle's own housing around the window left out
     private static Camera? _lensCam;
     private static RenderTexture? _lensTarget;
-    private static Transform? _lensNode;
-    private static EFT.InventoryLogic.Item? _lensItem;
-    private static float _lensSearchAt = -10f;
     private static int _lensJitter;
     private static bool _loggedLens, _loggedLensGrass;
     private static int _loggedLensSearch; private static bool _loggedLensFound;
@@ -1723,7 +1715,6 @@ internal static class EnvgFusion
             EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: no objective marker within 0.5 m of the eye (" + FpanoRailink.LensMarkers.Count + " F-PANO models known)");
         return best;
     }
-    private static readonly List<Transform> _lensQueue = new List<Transform>();
 
     // the lens camera placed for this frame: its projection the crop of the main camera's unjittered field with our
     // jitter (drawn) and without (unjittered); null if it can't be made
@@ -1888,8 +1879,6 @@ internal static class EnvgFusion
     private static readonly List<GlassPart> _glass = new List<GlassPart>(), _housing = new List<GlassPart>();
     private static GameObject? _glassGun;
     internal static bool GlassDirty = true;
-    private static readonly int GlassDepthId = Shader.PropertyToID("_EnvgGlassDepth");
-    private static readonly RenderTargetIdentifier[] _glassTargets = new RenderTargetIdentifier[5];
     private static int _loggedGlass = -1;
     private static readonly List<Renderer> _sightRenderers = new List<Renderer>();
     private static readonly HashSet<string> _loggedSights = new HashSet<string>();
@@ -1990,7 +1979,6 @@ internal static class EnvgFusion
                 + "; " + (_housing.Count - housingBefore) + " housing part(s): " + housingNames + "; " + lowLod + " lower-detail renderer(s), " + lensFaces + " opaque lens face(s) left out");
     }
 
-    private static readonly int GlassBehindId = Shader.PropertyToID("_FpanoGlassBehind");
     private static RenderTexture? _holeMask;
     private static void DrawGlass(CommandBuffer cb, RenderTexture depth, Vector2 jitter)
     {
@@ -2089,7 +2077,7 @@ internal static class EnvgFusion
             // the gun's own parts beyond the sight do not (user: "瞄具区域里面能看到枪自己的热融合")
             float sightFar = p.Sight < _sightFar.Count ? _sightFar[p.Sight] : 0f;
             cb.SetGlobalFloat(SightFarId, sightFar > 0f ? sightFar + 0.01f : 0f);
-            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 2);
+            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 0);
             drawn++;
         }
         if (targets)
@@ -2135,8 +2123,6 @@ internal static class EnvgFusion
             Object.Destroy(_lensTarget);
         }
         _lensTarget = null;
-        _lensNode = null;
-        _lensItem = null;
     }
 
     private static void CopyMain(Camera source, Camera main, RenderTexture picture, RenderTexture normals, RenderTexture depth, RenderTexture albedo, RenderTexture specular, Vector2 jitter)
