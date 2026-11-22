@@ -40,3 +40,6 @@ client/Unity/obj/
 client/build/out/
 item/fit_renders/
 item/icon_check/
+
+# release zips (package.py)
+dist/
