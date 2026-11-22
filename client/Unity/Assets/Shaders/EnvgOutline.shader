@@ -236,6 +236,12 @@ Shader "Justachae/FPANO/Outline"
         float d = tex2Dlod(_EnvgDepth, float4(cuv, 0, 0)).r;
         return d > 0.0 && d < NearHeld;
     }
+    // what was at a point last frame was the gun or the hands: a place the gun has just left (its history is the gun's)
+    bool nearThen(float2 previous)
+    {
+        float d = tex2Dlod(_EnvgDepthPrev, float4(previous, 0, 0)).r;
+        return _EnvgHeatTemporal.y > 0.0 && d > 0.0 && d < NearHeld;
+    }
     bool sameSurfaceThen(float2 previous, float predicted)
     {
         if (predicted <= 0.0 || _EnvgHeatTemporal.y <= 0.0)
@@ -1486,7 +1492,7 @@ Shader "Justachae/FPANO/Outline"
                 }
                 float2 previous = previousUv(i.uv);
                 // (the gun and the hands: this frame's own lines, as their heat)
-                if (_EnvgTemporal.x <= 0.0 || any(previous < 0.0) || any(previous > 1.0) || nearHeld(i.uv))
+                if (_EnvgTemporal.x <= 0.0 || any(previous < 0.0) || any(previous > 1.0) || nearHeld(i.uv) || nearThen(previous))
                     return float4(c, c, c, 1);
                 // (fetched sharply, as the heat's history: a bilinear fetch each frame, the view moving, flattened the
                 // lines' crests and fewer lines came through while turning)
@@ -1785,7 +1791,8 @@ Shader "Justachae/FPANO/Outline"
                 // the gun and the hands: this frame's own heat. They sway on their own against the camera, and no
                 // history of them (followed as the still world, or held at the same place) stays with them: it trailed
                 // a ghost of the gun behind it while it swung (the user's video, F-PANO 0.2.52)
-                if (nearHeld(i.uv))
+                // (and where the gun was last frame: what it uncovers starts anew, no trail of it left behind)
+                if (nearHeld(i.uv) || nearThen(previous))
                     return c;
                 if (sameSurfaceThen(previous, predicted))
                 {
