@@ -245,19 +245,8 @@ internal static class EnvgChain
         material.SetVector(LookId, new Vector4(t.LineBase, t.LineHot, t.LineHotAbove, 0f));
     }
 
-    // (a measuring build only: GPU samplers around the chain's groups, set by FpanoCost; null otherwise)
-    internal static UnityEngine.Profiling.CustomSampler?[]? Samplers;
-    internal static void Mark(CommandBuffer cb, int group, bool begin)
-    {
-        var s = Samplers;
-        if (s == null || group >= s.Length || s[group] == null)
-            return;
-        if (begin) cb.BeginSample(s[group]); else cb.EndSample(s[group]);
-    }
-
     internal static void Fill(CommandBuffer cb, Material m, EnvgChainInput t)
     {
-        Mark(cb, 1, true);
         int fineWidth = t.Width * t.Oversample, fineHeight = t.Height * t.Oversample;
         // our own long-wave picture from the deferred buffers: the lit picture, diffuse and specular colour, normals, depth
         cb.SetGlobalTexture(NormalsId, t.Normals);
@@ -329,8 +318,6 @@ internal static class EnvgChain
             Blur(cb, m, _foliageWide!, _foliageWide!, 3f, qw, qh, _foliageWideAcross!);
             cb.SetGlobalTexture(FoliageWideId, _foliageWide);
         }
-        Mark(cb, 1, false);
-        Mark(cb, 2, true);
         Step(cb, t.Picture, t.Heat2x, m, 14);
         // seams between meshes that see no surface are filled from the surfaces around; the geometric edges into g
         Step(cb, t.Heat2x, t.Seams, m, 16);
@@ -340,8 +327,6 @@ internal static class EnvgChain
         if (t.Frame >= 0 && _lastFrame >= 0 && t.Frame != _lastFrame + 1)
             ResetHistory();
         _lastFrame = t.Frame;
-        Mark(cb, 2, false);
-        Mark(cb, 3, true);
         if (t.FromMain && t.MotionReady && t.HeatTemporal > 0f && t.Motion != null && t.HistoryB != null)
         {
             // (made anew at another size, the history and its count hold nothing yet: the history starts anew)
@@ -371,8 +356,6 @@ internal static class EnvgChain
         }
         else
             _heatHistoryValid = false;
-        Mark(cb, 3, false);
-        Mark(cb, 4, true);
         // the base layer for the fused display: the heat averaged over one surface (about three pixels), into alpha
         if (t.HeatBase != null)
         {
@@ -404,8 +387,6 @@ internal static class EnvgChain
         cb.SetGlobalVector(LagId, new Vector4(agcFresh ? 1f : 1f - Mathf.Exp(-Mathf.Max(t.DeltaTime, 0f) / 1f), 0f, 0f, 0f));
         Step(cb, agcMean, _agcB, m, 10);
         cb.SetGlobalTexture(AgcId, _agcB);
-        Mark(cb, 4, false);
-        Mark(cb, 5, true);
         // the lens's blur (radius in detector pixels, at least half of one) is the filter's centre; the surround is the
         // same at twice the radius
         float centre = Mathf.Max(t.Smoothing, 0.5f) * t.Oversample;
@@ -424,8 +405,6 @@ internal static class EnvgChain
         Step(cb, t.Blurred, t.Edges, m, 11);
         // like the game's TAA: last frame's edge strength, brought to where things are now by the game's motion vectors
         // and held within this frame's neighbourhood, blended in before the threshold
-        Mark(cb, 5, false);
-        Mark(cb, 6, true);
         RenderTexture followed = t.Edges!;
         if (t.FromMain && t.MotionReady && t.Temporal > 0f && t.Motion != null && t.EdgeHistA != null && t.EdgeHistB != null)
         {
@@ -441,8 +420,6 @@ internal static class EnvgChain
         }
         else
             _edgeHistoryValid = false;
-        Mark(cb, 6, false);
-        Mark(cb, 7, true);
         // each edge's centre line (one pixel wide, along the response's ridge), through the threshold
         Step(cb, followed, t.Ridge, m, 26);
         // how crowded the lines are around each point, and their glow
@@ -460,7 +437,6 @@ internal static class EnvgChain
             Step(cb, t.Depth, _depthPrev);
             _depthPrevValid = true;
         }
-        Mark(cb, 7, false);
     }
 
 
