@@ -13,7 +13,8 @@ internal static class FpanoCost
 {
     private static readonly string[] States = { "thermal fusion from the lens camera", "thermal fusion from the main camera's buffers", "no thermal fusion" };
     private const int Frames = 340, Kept = 300, Rounds = 6;
-    private const float Settle = 3f, WaitForEyepieces = 150f, NoEyepieceProbe = 15f;
+    private const float Settle = 3f, WaitForEyepieces = 250f, NoEyepieceProbe = 15f, RaidWarmUp = 60f;   // (not in a raid's first minute: it is still loading)
+    private static float _raidSince = -1f;
 
     internal static bool LensOff => _round >= 0 && _round < Rounds && _round % 3 == 1;
     internal static bool ThermalOff => _round >= 0 && _round < Rounds && _round % 3 == 2;
@@ -22,7 +23,7 @@ internal static class FpanoCost
     private static int _frame;
     private static float _downSince, _waitSince;
     private static bool _sawNvgCost, _nvgCostDone;
-    private static readonly double[] _ms = new double[Rounds];
+    private static readonly float[][] _times = new float[Rounds][];   // the kept frames' times, for the median
     private static Listener? _listener;
 
     private sealed class Listener : ILogListener
@@ -69,7 +70,12 @@ internal static class FpanoCost
         if (_round >= Rounds)
             return;
         float now = Time.unscaledTime;
-        bool down = EnvgFusion.EnvgbDown && EyepieceLink.Deployed >= 0.999f && InRaid();
+        bool raid = InRaid();
+        if (!raid)
+            _raidSince = -1f;
+        else if (_raidSince < 0f)
+            _raidSince = now;
+        bool down = EnvgFusion.EnvgbDown && EyepieceLink.Deployed >= 0.999f && raid && now - _raidSince >= RaidWarmUp;
         if (_round == -3 || _round == -2)
         {
             if (!down) { _round = -3; return; }
@@ -94,7 +100,10 @@ internal static class FpanoCost
             return;
         _frame++;
         if (_frame > Frames - Kept)
-            _ms[_round] += Time.unscaledDeltaTime * 1000.0;
+        {
+            float[] t = _times[_round] ??= new float[Kept];
+            t[_frame - (Frames - Kept) - 1] = Time.unscaledDeltaTime * 1000f;
+        }
         if (_frame >= Frames)
         {
             _round++;
@@ -104,13 +113,25 @@ internal static class FpanoCost
         }
     }
 
+    private static double Median(int round)
+    {
+        float[]? t = _times[round];
+        if (t == null)
+            return 0;
+        System.Array.Sort(t);
+        return t[t.Length / 2];
+    }
+
     private static void Finish()
     {
-        double lens = (_ms[0] + _ms[3]) / (2.0 * Kept), main = (_ms[1] + _ms[4]) / (2.0 * Kept), none = (_ms[2] + _ms[5]) / (2.0 * Kept);
-        EnvgFusionPlugin.Log?.LogInfo("F-PANO COST: frame " + lens.ToString("F2") + " ms with the thermal fusion from the lens camera, " + main.ToString("F2")
+        double[] m = new double[Rounds];
+        for (int r = 0; r < Rounds; r++)
+            m[r] = Median(r);
+        double lens = (m[0] + m[3]) / 2.0, main = (m[1] + m[4]) / 2.0, none = (m[2] + m[5]) / 2.0;
+        EnvgFusionPlugin.Log?.LogInfo("F-PANO COST (medians): frame " + lens.ToString("F2") + " ms with the thermal fusion from the lens camera, " + main.ToString("F2")
             + " ms from the main camera's buffers, " + none.ToString("F2") + " ms without: the fusion costs " + (lens - none).ToString("F2") + " ms (of which the lens camera "
-            + (lens - main).ToString("F2") + " ms); rounds " + (_ms[0] / Kept).ToString("F2") + ", " + (_ms[1] / Kept).ToString("F2") + ", " + (_ms[2] / Kept).ToString("F2") + ", "
-            + (_ms[3] / Kept).ToString("F2") + ", " + (_ms[4] / Kept).ToString("F2") + ", " + (_ms[5] / Kept).ToString("F2") + " ms");
+            + (lens - main).ToString("F2") + " ms); rounds " + m[0].ToString("F2") + ", " + m[1].ToString("F2") + ", " + m[2].ToString("F2") + ", "
+            + m[3].ToString("F2") + ", " + m[4].ToString("F2") + ", " + m[5].ToString("F2") + " ms");
         EnvgFusionPlugin.Log?.LogInfo("F-PANO COST: done");
         if (_listener != null)
             BepInEx.Logging.Logger.Listeners.Remove(_listener);
