@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.48";
+    public const string Version = "0.2.49";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1753,6 +1753,8 @@ internal static class EnvgFusion
         }
         Camera cam = _lensCam;
         cam.targetTexture = _lensTarget;
+        // (all of its picture: the main camera draws into part of its target, its SSAA input, and CopyFrom took that rect)
+        cam.rect = new Rect(0f, 0f, 1f, 1f);
         cam.cullingMask = main.cullingMask;
         cam.clearFlags = main.clearFlags;
         cam.backgroundColor = main.backgroundColor;
