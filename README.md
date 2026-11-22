@@ -2,6 +2,10 @@
 
 L3Harris F-PANO (fused panoramic night vision goggle) and the Ops-Core RAILINK powered rails for SPT 4.1.6: the items, their server mod and the thermal client.
 
+## 0.2.63 beta 1：测试版
+
+This is a test version: the mod is still being tested in game, and things may change or break. Please report what looks wrong.
+
 ## Items (sold by Peacekeeper, black and FDE)
 
 - **F-PANO**: four-tube panoramic night vision with a fused thermal picture (white hot / black hot), a heading HUD and the I2 GAIN bar. Fits nine helmet shapes (13 helmets) in their own NVG slot, or the RAILINK's.
