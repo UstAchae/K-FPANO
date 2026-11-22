@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.47";
+    public const string Version = "0.2.48";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -135,6 +135,8 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         I2Noise = Config.Bind(Advanced, "夜视噪点", 0f,
             new ConfigDescription("白磷夜视的散粒噪声。0 是没有。", new AcceptableValueRange<float>(0f, 3f), advanced));
         Camera.onPreRender += EnvgFusion.OnPreRender;
+        CollimatorSight.OnCollimatorEnabled += EnvgFusion.SightEnabled;
+        CollimatorSight.OnCollimatorDisabled += EnvgFusion.SightDisabled;
         var harmony = new Harmony(Guid);
         MethodInfo? final = AccessTools.Method(typeof(SSAAImpl), "OnRenderImage");
         if (final != null)
@@ -1693,10 +1695,12 @@ internal static class EnvgFusion
         _lensQueue.Add(Wearer.gameObject.transform);
         try
         {
+            // (the helmet's model, as the body's head slot holds it, wherever it is parented)
+            if (Wearer.PlayerBody != null && Wearer.PlayerBody.SlotViews.TryGetByKey(EFT.InventoryLogic.EquipmentSlot.Headwear, out EFT.PlayerBody.SlotView head)
+                && head?.ParentedModel.Value != null)
+                _lensQueue.Insert(0, head.ParentedModel.Value.transform);
             if (Wearer.PlayerBody != null && Wearer.PlayerBody.transform.root != Wearer.gameObject.transform.root)
                 _lensQueue.Add(Wearer.PlayerBody.transform.root);
-            if (Wearer.PlayerBones != null && Wearer.PlayerBones.transform.root != Wearer.gameObject.transform.root)
-                _lensQueue.Add(Wearer.PlayerBones.transform.root);
         }
         catch (System.Exception) { }
         // (the node is a marker, without a renderer: it may sit under an object the eyepieces hide; its place is kept)
@@ -1874,6 +1878,10 @@ internal static class EnvgFusion
     private static readonly HashSet<string> _loggedSights = new HashSet<string>();
 
     private static bool IsSlot(Transform t) => t.name.StartsWith("mod_", System.StringComparison.OrdinalIgnoreCase);
+    private static readonly HashSet<CollimatorSight> _enabledSights = new HashSet<CollimatorSight>();
+    internal static void SightEnabled(CollimatorSight sight) { _enabledSights.Add(sight); GlassDirty = true; }
+    internal static void SightDisabled(CollimatorSight sight) { _enabledSights.Remove(sight); GlassDirty = true; }
+    private const float SightReach = 0.6f;   // a sight on the gun in the hands is within this of the lens
 
     // one sight's glass and housing onto the lists (skip: the game's reticle quad; lens: a scope's lens, always glass)
     private static void CollectSight(Transform sight, Renderer? skip, Renderer? lens)
@@ -1943,7 +1951,17 @@ internal static class EnvgFusion
             _glassGun = gun;
             _glass.Clear();
             _housing.Clear();
-            if (gun != null)
+            // the red dots and holographic sights the game has enabled near the lens (the ones it shows), and a scope's lens
+            // (the one the game aims through); the gun's own as well
+            Vector3 lensAt = _lensCam != null ? _lensCam.transform.position : Vector3.zero;
+            foreach (CollimatorSight collimator in _enabledSights)
+                if (collimator != null && (collimator.transform.position - lensAt).sqrMagnitude < SightReach * SightReach)
+                    CollectSight(collimator.transform, collimator.CollimatorMeshRenderer, null);
+            OpticSight? aimed = null;
+            try { aimed = EFT.CameraControl.CameraManager.Instance?.OpticCameraManager?.CurrentOpticSight; } catch (System.Exception) { }
+            if (aimed != null && aimed.LensRenderer != null)
+                CollectSight(aimed.transform, null, aimed.LensRenderer);
+            if (_glass.Count == 0 && gun != null)
             {
                 foreach (CollimatorSight collimator in gun.GetComponentsInChildren<CollimatorSight>(true))
                     if (collimator != null)
@@ -1997,7 +2015,14 @@ internal static class EnvgFusion
         _glassProbed = true;
         Camera cam = _lensCam!;
         Vector3 at = cam.transform.position;
-        var line = new System.Text.StringBuilder("F-PANO GLASS PROBE: lens at " + at.ToString("F3") + ";");
+        var line = new System.Text.StringBuilder("F-PANO GLASS PROBE: lens at " + at.ToString("F3") + ", eye at " + (_main != null ? _main.transform.position.ToString("F3") : "-") + ";");
+        GameObject? gunNow = null;
+        try { gunNow = Wearer?.HandsController?.ControllerGameObject; } catch (System.Exception) { }
+        line.Append(" gun ").Append(gunNow != null ? gunNow.name + " at " + (gunNow.transform.position - at).magnitude.ToString("F3") + " m" : "none").Append(";");
+        foreach (CollimatorSight sight in _enabledSights)
+            if (sight != null)
+                line.Append(" enabled sight ").Append(sight.transform.root.name).Append("/").Append(sight.name).Append(" at ").Append((sight.transform.position - at).magnitude.ToString("F3")).Append(" m view ")
+                    .Append(cam.WorldToViewportPoint(sight.transform.position).ToString("F2")).Append(";");
         Vector3 probeUv = Vector3.zero;
         bool have = false;
         foreach (GlassPart p in _glass)
