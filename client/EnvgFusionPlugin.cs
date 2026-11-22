@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.45";
+    public const string Version = "0.2.46";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1840,18 +1840,76 @@ internal static class EnvgFusion
         }
     }
 
-    // ---- the sights' glass on the gun in the hands (scopes' lenses, red dots' and holographic sights' windows): long-wave
-    // infrared does not pass glass, so from the thermal lens each is a surface, drawn into the thermal copies (the game
-    // draws glass after the opaque scene, so it is not in them). Collected once per gun and again when something is put
-    // on a gun (Dirty) or one of them is gone ----
+    // ---- the sights' glass on the gun in the hands, as ENVG-B had it (0.64-0.68): long-wave infrared does not pass
+    // glass, so from the thermal lens each sight's glass is a surface about the air's warmth, drawn into the thermal
+    // copies (the game draws glass after the opaque scene, so it is not in them). A sight's glass is the see-through parts
+    // of its own model (its materials drawn after the opaque scene: its windows, its lenses), not the game's reticle quad
+    // (which turns to face the eye and, seen at a slant, covers only part of the window); a scope's lens renderer too.
+    // Its housing (the opaque parts) is drawn first, its depth only, so what stands in front of the glass as the lens
+    // sees it keeps it hidden. From each sight's own root (the node under the slot it is fitted in), leaving out what is
+    // fitted into slots of its own. Collected once per gun and again when something is put on a gun (Dirty) or one of
+    // them is gone ----
+    private struct GlassPart
+    {
+        public Renderer Renderer;
+        public int Sub;
+    }
     private static Material? _glassMaterial;
     private static bool _glassTried;
-    private static readonly List<Renderer> _glass = new List<Renderer>();
+    private static readonly List<GlassPart> _glass = new List<GlassPart>(), _housing = new List<GlassPart>();
     private static GameObject? _glassGun;
     internal static bool GlassDirty = true;
     private static readonly int GlassDepthId = Shader.PropertyToID("_EnvgGlassDepth");
     private static readonly RenderTargetIdentifier[] _glassTargets = new RenderTargetIdentifier[5];
     private static int _loggedGlass = -1;
+    private static readonly List<Renderer> _sightRenderers = new List<Renderer>();
+    private static readonly HashSet<string> _loggedSights = new HashSet<string>();
+
+    private static bool IsSlot(Transform t) => t.name.StartsWith("mod_", System.StringComparison.OrdinalIgnoreCase);
+
+    // one sight's glass and housing onto the lists (skip: the game's reticle quad; lens: a scope's lens, always glass)
+    private static void CollectSight(Transform sight, Renderer? skip, Renderer? lens)
+    {
+        Transform root = sight;
+        for (int k = 0; k < 12 && root.parent != null && !IsSlot(root.parent); k++)
+            root = root.parent;
+        int glassBefore = _glass.Count;
+        var names = new System.Text.StringBuilder();
+        root.GetComponentsInChildren(true, _sightRenderers);
+        foreach (Renderer r in _sightRenderers)
+        {
+            if (r == null || r == skip || r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer)
+                continue;
+            bool inOtherSlot = false;
+            for (Transform? t = r.transform; t != null && t != root; t = t.parent)
+                if (IsSlot(t))
+                {
+                    inOtherSlot = true;
+                    break;
+                }
+            if (inOtherSlot)
+                continue;
+            Material[] materials = r.sharedMaterials;
+            for (int sub = 0; sub < materials.Length; sub++)
+            {
+                Material m = materials[sub];
+                if (m == null)
+                    continue;
+                if (r != lens && m.renderQueue <= 2500)
+                {
+                    _housing.Add(new GlassPart { Renderer = r, Sub = sub });
+                    continue;
+                }
+                _glass.Add(new GlassPart { Renderer = r, Sub = sub });
+                if (names.Length < 300)
+                    names.Append(r.name).Append(" [").Append(m.name).Append("] ");
+            }
+        }
+        _sightRenderers.Clear();
+        if (_loggedSights.Add(root.name))
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: sight " + root.name + ": " + (_glass.Count > glassBefore ? (_glass.Count - glassBefore) + " glass part(s): " + names : "no glass found"));
+    }
+
     private static void DrawGlass(CommandBuffer cb, RenderTexture picture, RenderTexture normals, RenderTexture albedo, RenderTexture specular, RenderTexture depth)
     {
         if (_glassMaterial == null && !_glassTried)
@@ -1869,31 +1927,29 @@ internal static class EnvgFusion
         try { gun = Wearer?.HandsController?.ControllerGameObject; } catch (System.Exception) { }
         bool stale = GlassDirty || gun != _glassGun;
         if (!stale)
-            foreach (Renderer r in _glass)
-                if (r == null) { stale = true; break; }
+            foreach (GlassPart p in _glass)
+                if (p.Renderer == null) { stale = true; break; }
         if (stale)
         {
             GlassDirty = false;
             _glassGun = gun;
             _glass.Clear();
+            _housing.Clear();
             if (gun != null)
             {
+                foreach (CollimatorSight collimator in gun.GetComponentsInChildren<CollimatorSight>(true))
+                    if (collimator != null)
+                        CollectSight(collimator.transform, collimator.CollimatorMeshRenderer, null);
                 foreach (OpticSight optic in gun.GetComponentsInChildren<OpticSight>(true))
                     if (optic != null && optic.LensRenderer != null)
-                        _glass.Add(optic.LensRenderer);
-                foreach (CollimatorSight collimator in gun.GetComponentsInChildren<CollimatorSight>(true))
-                {
-                    Renderer? r = collimator != null ? (collimator.CollimatorMeshRenderer != null ? collimator.CollimatorMeshRenderer : collimator.GetComponent<MeshRenderer>()) : null;
-                    if (r != null)
-                        _glass.Add(r);
-                }
+                        CollectSight(optic.transform, null, optic.LensRenderer);
             }
         }
         int drawn = 0;
         bool targets = false;
-        foreach (Renderer r in _glass)
+        foreach (GlassPart p in _glass)
         {
-            if (r == null || !r.gameObject.activeInHierarchy)
+            if (p.Renderer == null || !p.Renderer.gameObject.activeInHierarchy)
                 continue;
             if (!targets)
             {
@@ -1902,10 +1958,12 @@ internal static class EnvgFusion
                 cb.GetTemporaryRT(GlassDepthId, depth.width, depth.height, 24, FilterMode.Point, RenderTextureFormat.Depth);
                 cb.SetRenderTarget(_glassTargets, GlassDepthId);
                 cb.ClearRenderTarget(true, false, Color.clear);
+                // the housings first, their depth only
+                foreach (GlassPart h in _housing)
+                    if (h.Renderer != null && h.Renderer.gameObject.activeInHierarchy && h.Renderer.enabled)
+                        cb.DrawRenderer(h.Renderer, _glassMaterial, h.Sub, 1);
             }
-            int subs = r is MeshRenderer && r.TryGetComponent(out MeshFilter f) && f.sharedMesh != null ? f.sharedMesh.subMeshCount : 1;
-            for (int s = 0; s < subs; s++)
-                cb.DrawRenderer(r, _glassMaterial, s, 0);
+            cb.DrawRenderer(p.Renderer, _glassMaterial, p.Sub, 0);
             drawn++;
         }
         if (targets)
@@ -1913,7 +1971,7 @@ internal static class EnvgFusion
         if (drawn != _loggedGlass)
         {
             _loggedGlass = drawn;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " sight glass(es) of " + _glass.Count + " on the gun drawn as surfaces (long-wave infrared does not pass glass)");
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " glass part(s) of the gun's sights drawn as surfaces about the air's warmth (" + _housing.Count + " housing parts in front kept)");
         }
     }
 

@@ -41,13 +41,30 @@ Shader "Justachae/FPANO/GlassSurface"
                 if (dot(n, i.toEye) < 0.0)
                     n = -n;
                 targets t;
-                t.lit = float4(0.02, 0.02, 0.02, 1);
+                t.lit = float4(0, 0, 0, 1);
                 t.normals = float4(n * 0.5 + 0.5, 1);
-                t.albedo = float4(0.25, 0.25, 0.25, 1);
+                // (about the air's warmth, as ENVG-B 0.65 had it: no colour of its own, no light taken in)
+                t.albedo = float4(0, 0, 0, 1);
                 t.specular = float4(0, 0, 0, 0);
                 t.depth = float4(i.depth, 0, 0, 0);
                 return t;
             }
+            ENDCG
+        }
+
+        // 1: a sight's housing, its depth only: what stands in front of the glass as the lens sees it keeps it hidden
+        Pass
+        {
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull Off
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            float4 vert(float4 vertex : POSITION) : SV_POSITION { return UnityObjectToClipPos(vertex); }
+            float4 frag() : SV_Target { return 0; }
             ENDCG
         }
     }
