@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.64";
+    public const string Version = "0.2.65";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1902,6 +1902,7 @@ internal static class EnvgFusion
     }
     private static readonly int SightFarId = Shader.PropertyToID("_FpanoSightFar");
     private static int _holeCheck;
+    private static int _holeLogsLeft = 6, _glassLogsLeft = 6;   // (once per sight change filled a raid's log: a few, then quiet)
     private static void CollectSight(Transform sight, Renderer? skip, Renderer? lens)
     {
         Transform root = sight;
@@ -2083,9 +2084,10 @@ internal static class EnvgFusion
         }
         if (targets)
         {
-            if (_holeCheck > 0 && _holeMask != null && SystemInfo.supportsAsyncGPUReadback)
+            if (_holeCheck > 0 && _holeLogsLeft > 0 && _holeMask != null && SystemInfo.supportsAsyncGPUReadback)
             {
                 _holeCheck--;
+                _holeLogsLeft--;
                 int w0 = _holeMask.width, h0 = _holeMask.height;
                 string far0 = string.Join(", ", System.Linq.Enumerable.Select(_sightFar, x => x.ToString("F3")));
                 cb.RequestAsyncReadback(_holeMask, r =>
@@ -2109,7 +2111,8 @@ internal static class EnvgFusion
         if (drawn != _loggedGlass)
         {
             _loggedGlass = drawn;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " glass part(s) of the sights cut a hole in the thermal picture where the line goes on out through them (" + _housing.Count + " housing parts in front kept)");
+            if (_glassLogsLeft-- > 0)
+                EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens: " + drawn + " glass part(s) of the sights cut a hole in the thermal picture where the line goes on out through them (" + _housing.Count + " housing parts in front kept)");
         }
     }
 
