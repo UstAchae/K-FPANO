@@ -89,6 +89,11 @@ internal static class EnvgChain
     // the thermal core's gain control (mean and mean square of the picture, followed over a second)
     internal static RenderTexture? Agc => _agcB;
 
+    // the frame this chain's buffer last ran (set by the caller right after executing it)
+    internal static int Ran = -1;
+    private static int _gapNoted = -1, _gapsLogged;
+    internal static System.Action<string>? Note;   // the plugin's log (this file is shared with the editor tools)
+
     internal static void ResetHistory()
     {
         _edgeHistoryValid = false;
@@ -323,9 +328,22 @@ internal static class EnvgChain
         Step(cb, t.Heat2x, t.Seams, m, 16);
         Step(cb, t.Seams, t.HistoryB);
         // followed in time (the jittered copy's edges settle, as the game's TAA settles its picture)
-        // (a gap in the frames, the thermal picture off for a while, leaves the history stale: it starts anew)
-        if (t.Frame >= 0 && _lastFrame >= 0 && t.Frame != _lastFrame + 1)
+        // (a gap in the frames, the thermal picture off for a while, leaves the history stale: it starts anew. The gap
+        // is in the frames this chain was RUN, not filled: it is filled every frame the device is on, but run only when
+        // its picture is shown (in the eyepieces or over the screen). Flipped up, mid-flip, another device worn a while
+        // or a clip-on not claimed, it was filled and not run, and on its return last time's history, of another view,
+        // was taken as last frame's: old outlines stayed in the picture.)
+        if (t.Frame >= 0 && (Ran < 0 || t.Frame != Ran + 1))
+        {
             ResetHistory();
+            // (noted when it comes back after a gap: once per gap, the first few)
+            if (Ran >= 0 && t.Frame - Ran > 1 && _gapNoted != Ran && _gapsLogged < 5)
+            {
+                _gapNoted = Ran;
+                _gapsLogged++;
+                Note?.Invoke("thermal history started anew: the picture was not shown for " + (t.Frame - Ran - 1) + " frame(s)");
+            }
+        }
         _lastFrame = t.Frame;
         if (t.FromMain && t.MotionReady && t.HeatTemporal > 0f && t.Motion != null && t.HistoryB != null)
         {
