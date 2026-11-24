@@ -99,7 +99,7 @@ Models: 3D Military Assets (3DMA), L3Harris F-PANO NVGs and Ops-Core RAILINK Dat
 
 With K-3PS-C 1.9.0 beta 1 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube. With an older K-3PS-C (1.8.2 is the last release) or without it, the F-PANO uses the game's own full-screen night vision, its white phosphor and the thermal picture laid over the whole screen.
 
-旧版本里单独的 F-PANO 支架和电池物品还能加载（已有的不会丢），但装不到任何地方，也不再出售。
+旧版本里单独的 F-PANO 支架和电池物品从 0.2.69 起不再存在：电池是 RAILINK 的一部分，支架是 F-PANO 的一部分。
 
 ## 仓库（开发用）
 

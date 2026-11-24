@@ -50,50 +50,6 @@
     ]
    }
   },
-  "battery": {
-   "clone": "5a398ab9c4a282000c5a9842",
-   "handbook": "5b5f755f86f77447ec5d770e",
-   "price": 18000,
-   "usd": 180,
-   "loyalty": 2,
-   "weight": 0.25,
-   "width": 1,
-   "height": 1,
-   "locales": {
-    "en": [
-     "Ops-Core RAILINK Battery Pack+",
-     "BP+",
-     "The RAILINK system's battery pack, six AA lithium cells, worn on the back of the helmet. It powers everything on the rails; the F-PANO gives no picture without it."
-    ],
-    "ch": [
-     "Ops-Core RAILINK Battery Pack+ 电池盒",
-     "BP+",
-     "RAILINK 系统的电池盒，装 6 节 AA 锂电池，挂在头盔后部，为导轨上的所有设备供电。没有它，F-PANO 放下也没有画面。"
-    ]
-   }
-  },
-  "mount": {
-   "clone": "5a16b8a9fcdbcb00165aa6ca",
-   "handbook": "5b5f755f86f77447ec5d770e",
-   "price": 30000,
-   "usd": 300,
-   "loyalty": 3,
-   "weight": 0.2,
-   "width": 1,
-   "height": 1,
-   "locales": {
-    "en": [
-     "F-PANO helmet mount",
-     "F-PANO mnt",
-     "The mount that holds the F-PANO goggle on a RAILINK helmet: height, tilt and fore-aft adjustment, and a flip-up hinge. It fits only the RAILINK rails' mount."
-    ],
-    "ch": [
-     "F-PANO 头盔支架",
-     "F-PANO 支架",
-     "把 F-PANO 夜视仪固定在装有 RAILINK 导轨的头盔上的支架，可调高低、俯仰、前后，可以向上翻起。只能装在 RAILINK 导轨的支架位上。"
-    ]
-   }
-  },
   "goggle": {
    "clone": "5c0558060db834001b735271",
    "handbook": "5b5f749986f774094242f199",
@@ -207,34 +163,6 @@
    "id": "6a4f9a400000000000000012",
    "assort": "6a4f9a400000000000000112",
    "bundle": "ustachae_fpano/rails_blk.bundle"
-  },
-  {
-   "kind": "battery",
-   "colour": "fde",
-   "id": "6a4f9a400000000000000021",
-   "assort": "6a4f9a400000000000000121",
-   "bundle": "ustachae_fpano/battery_fde.bundle"
-  },
-  {
-   "kind": "battery",
-   "colour": "blk",
-   "id": "6a4f9a400000000000000022",
-   "assort": "6a4f9a400000000000000122",
-   "bundle": "ustachae_fpano/battery_blk.bundle"
-  },
-  {
-   "kind": "mount",
-   "colour": "fde",
-   "id": "6a4f9a400000000000000031",
-   "assort": "6a4f9a400000000000000131",
-   "bundle": "ustachae_fpano/mount_fde.bundle"
-  },
-  {
-   "kind": "mount",
-   "colour": "blk",
-   "id": "6a4f9a400000000000000032",
-   "assort": "6a4f9a400000000000000132",
-   "bundle": "ustachae_fpano/mount_blk.bundle"
   },
   {
    "kind": "goggle",

@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.68");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.69");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -29,14 +29,14 @@ public record ModMetadata : IModMetadata
     public string License { get; init; } = "All rights reserved";
 }
 
-// Four items per colour (db/items.json), at the user's design:
+// Five kinds per colour (db/items.json), at the user's design:
 //   rails   the Ops-Core RAILINK powered rails. They take the helmet's headset slot (the one that holds the Ops-Core RAC
 //           or the EXFIL ComTac headsets) or, on NVG helmets without one, a new slot (newHelmetSlot). Their own slots:
 //           mod_equipment (those helmet headsets), mod_nvg (the F-PANO), mod_mount_000 / 001 (the two Ops-Core ARC rail
 //           adapters, so every helmet light). The Battery Pack+ is part of them since 0.2.15 (user: "把电池和 RALINK 做成一个
 //           物品吧"). They conflict with every other NVG and NVG mount, so a helmet with them takes no other night vision;
-//   battery the old separate Battery Pack+: still known (owned copies load), fits nowhere, not sold;
-//   mount   the old separate F-PANO mount: the same;
+//   (the old separate Battery Pack+ and F-PANO mount are gone since 0.2.69, user: "任何途径都不应该得到这两个物品":
+//   they are parts of the rails and the goggle, not items of their own)
 //   goggle  the F-PANO with its own mount (a GPNVG-18 clone): in the rail helmets' own mod_nvg (no rails needed since
 //           0.2.15, user: "取消 F-PANO 只能装在有 RALINK 的头盔上的限制，但还是只能装那 9 种头盔") and in the rails' mod_nvg.
 //           Powered (picture, cable, the icon's green light) only with the rails on its helmet; the client does that.
@@ -119,9 +119,6 @@ public class FpanoMod(
                 case "hl2a": case "mpls": case "strobe":
                     props["ModesCount"] = k["modes"]!.GetValue<int>();   // mode_001..mode_00N in the prefab
                     break;
-                case "mount":
-                    slots.Add(Slot("mod_nvg", Ids(made["goggle"])));
-                    break;
                 case "goggle":
                     // White phosphor, the same blue-white as the K-ENVG-B goggle (measured from the look the user picked).
                     props["Color"] = new JsonObject { ["r"] = 156, ["g"] = 217, ["b"] = 255, ["a"] = 254 };
@@ -136,14 +133,13 @@ public class FpanoMod(
                 loc[lang] = new JsonObject { ["name"] = $"{a[0]!.GetValue<string>()} ({c})", ["shortName"] = a[1]!.GetValue<string>(), ["description"] = a[2]!.GetValue<string>() };
             }
             if (Create(node, loc, options, k["handbook"]!.GetValue<string>(), k["price"]!.GetValue<double>(), id) is not MongoId newId) continue;
-            if (kind != "mount" && kind != "battery") AddListing(newId, new MongoId(e["assort"]!.GetValue<string>()), db["trader"]!.GetValue<string>(), db["currency"]!.GetValue<string>(),
+            AddListing(newId, new MongoId(e["assort"]!.GetValue<string>()), db["trader"]!.GetValue<string>(), db["currency"]!.GetValue<string>(),
                        k["usd"]!.GetValue<double>(), k["loyalty"]!.GetValue<int>());
             created++;
         }
 
         // The goggle goes in the helmet's own mod_nvg, on the helmets that take the rails (user: "支架装在头盔夜视仪槽").
-        // Since 0.2.10 the goggle carries its mount (user: "要不支架和 F-PANO 做成一个物品吧"): the goggle goes there; the
-        // separate mount stays a known item (owned copies load) but fits nowhere and is not sold.
+        // Since 0.2.10 the goggle carries its mount (user: "要不支架和 F-PANO 做成一个物品吧"): the goggle goes there.
         var mountHelmets = db["railHelmets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
         foreach (var hid in mountHelmets)
             if (templateTable.Items.TryGetValue(hid, out var h))
