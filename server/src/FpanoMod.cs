@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.67");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.68");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -212,15 +212,35 @@ public class FpanoMod(
                 foreach (var h in railHelmets) if (!on.Contains(h) && !t.Properties.ConflictingItems.Contains(h)) t.Properties.ConflictingItems.Add(h);
                 inherited++;
             }
-        // Mandibles (Airframe chops, Caiman, NeoSteel) and the helmet headsets no longer conflict (user: "护额类的装备和 RALINK
-        // 的耳机槽位冲突了，把这个冲突取消掉"): no game helmet takes both, so only a headset on the RAILINK meets one; the
-        // RAILINK carries it clear of the mandible. Ear covers and side armour still conflict (they sit where the cups go).
-        var mandibles = db["railMandibles"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
-        int freed = 0;
-        foreach (var (a, others) in new[] { (headsets, mandibles), (mandibles, headsets) })
-            foreach (var id in a)
-                if (templateTable.Items.TryGetValue(id, out var t) && t.Properties?.ConflictingItems is { } c)
-                    foreach (var o in others) if (c.Remove(o)) freed++;
+        // Face and ear armour against the headsets, by what it protects (user: "只要它保护耳朵，就让它和耳机冲突，只护下巴就不
+        // 冲突"): of the items the rail helmets and the rails take, one that guards the ears conflicts with every headset
+        // (the cups sit there; two-in-ones like the AF chops, the NeoSteel and WTT's EXFIL mandible count as ear armour);
+        // one that guards the jaw but not the ears does not (0.2.30's lift, then a fixed list, for the Caiman's mandible
+        // and the like; the RAILINK carries the headset clear of it).
+        var guards = new HashSet<MongoId>(pushedOut.Keys);
+        foreach (var hid in railHelmets)
+            if (templateTable.Items.TryGetValue(hid, out var h))
+                foreach (var s in h.Properties?.Slots ?? []) foreach (var f in s.Properties?.Filters ?? []) foreach (var x in f.Filter ?? []) guards.Add(x);
+        int freed = 0, earBound = 0;
+        foreach (var id in guards)
+        {
+            if (headsets.Contains(id) || !templateTable.Items.TryGetValue(id, out var t) || t.Properties?.ArmorColliders is not { } zones) continue;
+            var z = zones.Select(c => c.ToString()).ToHashSet();
+            if (z.Contains("Ears"))
+                foreach (var hsId in headsets)
+                {
+                    if (!templateTable.Items.TryGetValue(hsId, out var ht) || ht.Properties is null) continue;
+                    t.Properties.ConflictingItems ??= []; ht.Properties.ConflictingItems ??= [];
+                    if (!t.Properties.ConflictingItems.Contains(hsId)) { t.Properties.ConflictingItems.Add(hsId); earBound++; }
+                    if (!ht.Properties.ConflictingItems.Contains(id)) { ht.Properties.ConflictingItems.Add(id); earBound++; }
+                }
+            else if (z.Contains("Jaw"))
+                foreach (var hsId in headsets)
+                {
+                    if (t.Properties.ConflictingItems?.Remove(hsId) == true) freed++;
+                    if (templateTable.Items.TryGetValue(hsId, out var ht) && ht.Properties?.ConflictingItems?.Remove(id) == true) freed++;
+                }
+        }
         // The PRA / SCRA rail adapters and the ComTac V / VI conflict (user: "这两个东西应该和 comtac 耳机是冲突的"): on the
         // RAILINK the ComTac's clip takes the rail run the adapters would use.
         var adapters = db["railAdapters"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
@@ -233,7 +253,7 @@ public class FpanoMod(
                     t.Properties.ConflictingItems ??= [];
                     foreach (var o in others) if (!t.Properties.ConflictingItems.Contains(o)) { t.Properties.ConflictingItems.Add(o); bound++; }
                 }
-        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/mandible conflicts lifted, {bound} adapter/ComTac conflicts added; {inherited} items from the helmets' headset slots on the rails");
+        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/jaw-armour conflicts lifted, {earBound} headset/ear-armour conflicts added, {bound} adapter/ComTac conflicts added; {inherited} items from the helmets' headset slots on the rails");
         return Task.CompletedTask;
     }
 

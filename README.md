@@ -38,7 +38,8 @@ This is a test version: the mod is still being tested in game, and things may ch
 - RAILINK 上的 F-PANO 和头盔自己夜视仪槽里的设备在同一个位置，两者不能同时装。
 - 装了 RAILINK 后，头盔自带的 ARC 卡座不能用，PRA、SCRA 只装在 RAILINK 左右两边；头盔自带卡座上已经有东西时，要先取下才能装 RAILINK。
 - PRA、SCRA 和 ComTac V/VI 冲突（ComTac 卡在同一段导轨上）。
-- 护颚（AF、凯门鳄、NeoSteel）不再和 RAILINK 上的耳机冲突；护耳和侧甲仍然冲突。
+- 护颚、护耳按保护部位算：保护耳朵的（护耳、侧甲，以及 AF 护颚、NeoSteel、WTT 的 EXFIL 护颚这类二合一）和耳机冲突；只护下巴的（如凯门鳄护颚）不冲突。
+- EXFIL 上被 RAILINK 占掉的护耳、护颚槽，改到 RAILINK 自己的槽里，位置和原来一样，只能装在原来能装它的头盔上。
 
 ## 快捷键
 
