@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "Justachae's F-PANO";
     public string Author { get; init; } = "UstAchae";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.65");  // one version for the whole K-FPANO mod (client and server); bump on every change
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.66");  // one version for the whole K-FPANO mod (client and server); bump on every change
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public bool HasPrepatcher { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -108,6 +108,7 @@ public class FpanoMod(
                 case "rails":
                     slots.Add(Slot("mod_equipment", Strs(db["railHeadsets"])));
                     slots.Add(Slot("mod_nvg", Ids(made["goggle"])));      // the F-PANO on the rails (user: "让 F-PANO 也能装在 RALINK 上面")
+                    slots.Add(Slot("mod_equipment_000", new JsonArray())); // what the rails push out of the helmet's slot (filled below)
                     slots.Add(Slot("mod_mount_000", Strs(db["railAdapters"])));
                     slots.Add(Slot("mod_mount_001", Strs(db["railAdapters"])));
                     // the RAILINK lights (user: "做成 2"): two front light slots, two rear strobe slots
@@ -164,13 +165,24 @@ public class FpanoMod(
         var headsets = db["railHeadsets"]!.AsArray().Select(x => new MongoId(x!.GetValue<string>())).ToHashSet();
         string newSlot = db["newHelmetSlot"]!.GetValue<string>();
         int joined = 0, added = 0;
+        var railsSet = made["rails"].ToHashSet();
+        var pushedOut = new Dictionary<MongoId, HashSet<MongoId>>();   // item -> the rail helmets whose headset slot took it
         foreach (var it in templateTable.Items.Values)
         {
             if (it.Parent != Head || it.Properties?.Slots is not { } hs || !railHelmets.Contains(it.Id)) continue;
             var headsetSlot = hs.FirstOrDefault(s => (s.Properties?.Filters ?? []).Any(f => f.Filter?.Any(headsets.Contains) == true));
             if (headsetSlot is not null)
             {
-                foreach (var f in headsetSlot.Properties!.Filters!) foreach (var r in made["rails"]) f.Filter!.Add(r);
+                foreach (var f in headsetSlot.Properties!.Filters!)
+                {
+                    foreach (var x in f.Filter!)
+                        if (!headsets.Contains(x) && !railsSet.Contains(x))
+                        {
+                            if (!pushedOut.TryGetValue(x, out var on)) pushedOut[x] = on = [];
+                            on.Add(it.Id);
+                        }
+                    foreach (var r in made["rails"]) f.Filter!.Add(r);
+                }
                 joined++;
             }
             else
@@ -185,6 +197,21 @@ public class FpanoMod(
                 added++;
             }
         }
+        // What the rails push out of a helmet's headset slot (on the EXFIL: its ear covers and, with WTT, the EXFIL
+        // ballistic mandibles) goes on the rails' mod_equipment_000, where it sits as it did on the helmet (user: "原本装
+        // RALINK 之前能装备的东西...在装备了 RALINK 以后，应该还能够装备这些东西并继承之前的关系"). Their own conflicts stay as
+        // they are; each conflicts with the rail helmets whose slot never took it, so it still fits only the helmets it fitted.
+        int inherited = 0;
+        foreach (var r in made["rails"])
+            if (templateTable.Items.TryGetValue(r, out var rt) && rt.Properties?.Slots?.FirstOrDefault(s => s.Name == "mod_equipment_000") is { } rs)
+                foreach (var f in rs.Properties?.Filters ?? []) foreach (var x in pushedOut.Keys) if (!f.Filter!.Contains(x)) f.Filter.Add(x);
+        foreach (var (x, on) in pushedOut)
+            if (templateTable.Items.TryGetValue(x, out var t) && t.Properties is not null)
+            {
+                t.Properties.ConflictingItems ??= [];
+                foreach (var h in railHelmets) if (!on.Contains(h) && !t.Properties.ConflictingItems.Contains(h)) t.Properties.ConflictingItems.Add(h);
+                inherited++;
+            }
         // Mandibles (Airframe chops, Caiman, NeoSteel) and the helmet headsets no longer conflict (user: "护额类的装备和 RALINK
         // 的耳机槽位冲突了，把这个冲突取消掉"): no game helmet takes both, so only a headset on the RAILINK meets one; the
         // RAILINK carries it clear of the mandible. Ear covers and side armour still conflict (they sit where the cups go).
@@ -206,7 +233,7 @@ public class FpanoMod(
                     t.Properties.ConflictingItems ??= [];
                     foreach (var o in others) if (!t.Properties.ConflictingItems.Contains(o)) { t.Properties.ConflictingItems.Add(o); bound++; }
                 }
-        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/mandible conflicts lifted, {bound} adapter/ComTac conflicts added");
+        logger.Success($"F-PANO loaded: {created} items; RAILINK rails in {joined} helmets' headset slots and {added} new helmet slots; {otherNvgs.Count} other NVGs and mounts conflict with them; {freed} headset/mandible conflicts lifted, {bound} adapter/ComTac conflicts added; {inherited} items from the helmets' headset slots on the rails");
         return Task.CompletedTask;
     }
 

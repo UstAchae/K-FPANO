@@ -126,6 +126,11 @@ def split(out, info):
     # the F-PANO on the rails (user: "让 F-PANO 也能装在 RALINK 上面"): its slot where a helmet's mod_nvg puts it, so the
     # goggle's root is the rails' root (on a helmet the client puts this node on the helmet's own mod_nvg)
     rails.append(node('mod_nvg', '', Gi))
+    # what the helmet's headset slot also held (the EXFIL's ear covers and WTT's EXFIL mandibles share its
+    # mod_equipment_000 with the ComTacs; user: "原本装 RALINK 之前能装备的东西...应该还能够装备这些东西并继承之前的关系"):
+    # a slot at the rails' root, G^-1 like mod_nvg, so the item sits exactly where it sat in the helmet's slot (the rails'
+    # root is that slot's frame; the client moves only fpano_railink). The server fills its filter per helmet.
+    rails.append(node('mod_equipment_000', '', Gi))
     fits = json.loads((ITEM / 'railink_fit.json').read_text())
     def group_inv(tpl):
         fit = fits[tpl]; sc = fit['scale'][0] if isinstance(fit['scale'], list) else fit['scale']
