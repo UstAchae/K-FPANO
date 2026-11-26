@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.77";
+    public const string Version = "0.2.78";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1115,11 +1115,13 @@ internal static class EnvgFusion
         _mainCopy?.Clear();
         _motionCopy?.Clear();
         _grassMaskCb?.Clear();
+        _glassGb?.Clear();
 
     }
 
     private static void Release()
     {
+        ClearWorldGlass();
         if (_mainCopy != null && _mainCopyCamera != null)
             _mainCopyCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
         if (_motionCopy != null && _motionCamera != null)
@@ -2042,33 +2044,62 @@ internal static class EnvgFusion
         _lensTarget = null;
     }
 
-    // window glass (ThermalScene): an even surface in the lens camera's diffuse colour, against its depth, so the
-    // heat behind it is not seen (long-wave infrared does not pass glass); a mid grey, a pane of the air's warmth
+    // window glass (ThermalScene): drawn into the lens camera's G-buffer right after its opaque scene, as an opaque
+    // surface of its own (an even grey, little shine, its own normal and depth), so that everything the thermal
+    // picture is made from (the surfaces' colour, the lit picture, the normals, the depth) has the pane, not what is
+    // behind it: long-wave infrared does not pass glass. (Drawn into the colour alone, 0.1.22-0.1.27, the lit picture,
+    // the normals and the depth still showed the room behind it, in the full thermal mode above all.)
     private static readonly int WorldGlassId = Shader.PropertyToID("_ThermalWorldGlass");
     private static int _worldGlassDrawn, _worldGlassPass = -2;
     private static Material? _worldGlassMaterial;
-    private static void DrawWorldGlass(CommandBuffer cb, Camera camera)
+    private static CommandBuffer? _glassGb;
+    private static Camera? _glassGbCamera;
+    private static readonly RenderTargetIdentifier[] GBufferTargets =
+    {
+        BuiltinRenderTextureType.GBuffer0, BuiltinRenderTextureType.GBuffer1, BuiltinRenderTextureType.GBuffer2, BuiltinRenderTextureType.CameraTarget,
+    };
+    private static void FillWorldGlass(Camera camera)
     {
         if (_worldGlassPass == -2)
         {
             Shader? shader = BundleShader("Justachae/FPANO/GlassSurface");
             if (shader != null && shader.isSupported)
                 _worldGlassMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
-            _worldGlassPass = _worldGlassMaterial != null ? _worldGlassMaterial.FindPass("WORLDGLASS") : -1;
+            _worldGlassPass = _worldGlassMaterial != null ? _worldGlassMaterial.FindPass("WORLDGLASSGB") : -1;
             if (_worldGlassPass < 0)
-                EnvgFusionPlugin.Log?.LogWarning("F-PANO: the glass shader has no world glass pass: window glass not drawn");
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO: the glass shader has no G-buffer glass pass: window glass not drawn");
         }
         _worldGlassDrawn = 0;
         if (_worldGlassPass < 0 || _worldGlassMaterial == null)
             return;
-        cb.SetRenderTarget(BuiltinRenderTextureType.GBuffer0, BuiltinRenderTextureType.CameraTarget);
-        cb.SetGlobalVector(WorldGlassId, new Vector4(0.4f, 0.4f, 0.4f, 1f));
-        _worldGlassDrawn = ThermalScene.DrawGlass(cb, _worldGlassMaterial, _worldGlassPass, camera);
+        if (_glassGb == null || _glassGbCamera != camera)
+        {
+            ClearWorldGlass();
+            _glassGb ??= new CommandBuffer { name = "Justachae F-PANO window glass for the thermal lens" };
+            camera.AddCommandBuffer(CameraEvent.AfterGBuffer, _glassGb);
+            _glassGbCamera = camera;
+        }
+        _glassGb.Clear();
+        _glassGb.SetRenderTarget(GBufferTargets, BuiltinRenderTextureType.CameraTarget);
+        _glassGb.SetGlobalVector(WorldGlassId, new Vector4(0.4f, 0.4f, 0.4f, 1f));
+        _worldGlassDrawn = ThermalScene.DrawGlass(_glassGb, _worldGlassMaterial, _worldGlassPass, camera);
+    }
+
+    private static void ClearWorldGlass()
+    {
+        if (_glassGb != null && _glassGbCamera != null)
+            _glassGbCamera.RemoveCommandBuffer(CameraEvent.AfterGBuffer, _glassGb);
+        _glassGbCamera = null;
+        _glassGb?.Clear();
     }
 
     private static void CopyMain(Camera source, Camera main, RenderTexture picture, RenderTexture normals, RenderTexture depth, RenderTexture albedo, RenderTexture specular, Vector2 jitter)
     {
         bool lens = source != main;
+        if (lens)
+            FillWorldGlass(source);
+        else
+            ClearWorldGlass();
         if (_mainCopy == null || _mainCopyCamera != source)
         {
             if (_mainCopy != null && _mainCopyCamera != null)
@@ -2084,8 +2115,6 @@ internal static class EnvgFusion
         _mainCopy.SetGlobalVector(FootprintId, lens ? new Vector4(1f / normals.width, 1f / normals.height, 0f, 0f) : new Vector4(_crop.z / normals.width, _crop.w / normals.height, 0f, 0f));
         _mainCopy.Blit(BuiltinRenderTextureType.CameraTarget, picture, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer2, normals, Material, 25);
-        if (lens)
-            DrawWorldGlass(_mainCopy, source);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, albedo, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer1, specular, Material, 25);
         _mainCopy.Blit(normals, depth, Material, 12);
