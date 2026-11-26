@@ -48,6 +48,19 @@ internal static class ThermalScene
             Collect(SceneManager.GetSceneAt(i));
     }
 
+    // other see-through glass on the levels, not the WindowsManager's shader (Interchange: glass_03 on Standard,
+    // Popcorn_Glass, goshan_glass on Custom/Glass2): a see-through material named glass, not a sight's lens or the
+    // distortion drawn over broken glass
+    private static bool OtherGlass(Material m, string shader)
+    {
+        if (m.renderQueue < 2500)
+            return false;
+        if (m.name.IndexOf("glass", System.StringComparison.OrdinalIgnoreCase) < 0 && shader.IndexOf("glass", System.StringComparison.OrdinalIgnoreCase) < 0)
+            return false;
+        return shader.IndexOf("optic", System.StringComparison.OrdinalIgnoreCase) < 0 && shader.IndexOf("collimator", System.StringComparison.OrdinalIgnoreCase) < 0
+            && shader.IndexOf("distort", System.StringComparison.OrdinalIgnoreCase) < 0 && m.name.IndexOf("scope", System.StringComparison.OrdinalIgnoreCase) < 0;
+    }
+
     private static void Collect(Scene scene)
     {
         if (!scene.IsValid() || !scene.isLoaded)
@@ -79,7 +92,7 @@ internal static class ThermalScene
                         // (the game's own test of a window glass material, WindowsManager.IsMaterialValid, for each
                         // material: a renderer with more than one (the escalators' balustrades) is not the
                         // WindowsManager's, drawn by itself, but its glass is glass all the same)
-                        if (r is MeshRenderer && WindowsManager.IsMaterialValid(m))
+                        if (r is MeshRenderer && m != null && (WindowsManager.IsMaterialValid(m) || OtherGlass(m, shader)))
                         {
                             // (by its mesh: for the WindowsManager's windows the game has switched the renderer off)
                             Mesh? mesh = r is MeshRenderer && r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
