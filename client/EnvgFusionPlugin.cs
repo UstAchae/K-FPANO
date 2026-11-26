@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.79";
+    public const string Version = "0.2.80";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1817,6 +1817,7 @@ internal static class EnvgFusion
     }
     private static int _sightCount;
     private static readonly List<bool> _sightScope = new List<bool>();   // each sight: a magnified scope's (its lens) or not
+    private static readonly bool SightsSolid = true;   // every sight's glass solid for the thermal lens, none a hole
     private static readonly List<float> _sightFar = new List<float>();
     private static Material? _glassMaterial;
     private static bool _glassTried;
@@ -1995,9 +1996,9 @@ internal static class EnvgFusion
         {
             if (p.Renderer == null || !p.Renderer.gameObject.activeInHierarchy)
                 continue;
-            // (a red dot's or holographic sight's glass cuts no hole: it is drawn solid with the window glass, as
-            // long-wave infrared sees it, the user's 2026-11-26; a magnified scope keeps its hole)
-            if (p.Sight >= _sightScope.Count || !_sightScope[p.Sight])
+            // (no sight's glass cuts a hole any more: red dots, holographic sights and magnified scopes alike are
+            // drawn solid with the window glass, as long-wave infrared sees them, the user's 2026-11-26)
+            if (SightsSolid)
                 continue;
             if (!targets)
             {
@@ -2090,10 +2091,10 @@ internal static class EnvgFusion
         _glassGb.SetRenderTarget(GBufferTargets, BuiltinRenderTextureType.CameraTarget);
         _glassGb.SetGlobalVector(WorldGlassId, new Vector4(0.4f, 0.4f, 0.4f, 1f));
         _worldGlassDrawn = ThermalScene.DrawGlass(_glassGb, _worldGlassMaterial, _worldGlassPass, camera);
-        // the red dots' and holographic sights' glass on the gun in the hands: solid too (not a hole any more)
+        // the sights' glass on the gun in the hands (red dots, holographic sights, magnified scopes): solid too
         foreach (GlassPart p in _glass)
         {
-            if (p.Renderer == null || !p.Renderer.enabled || !p.Renderer.gameObject.activeInHierarchy || p.Sight >= _sightScope.Count || _sightScope[p.Sight])
+            if (p.Renderer == null || !p.Renderer.enabled || !p.Renderer.gameObject.activeInHierarchy)
                 continue;
             _glassGb.DrawRenderer(p.Renderer, _worldGlassMaterial, p.Sub, _worldGlassPass);
         }
