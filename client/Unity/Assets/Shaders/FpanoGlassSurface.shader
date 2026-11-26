@@ -32,5 +32,21 @@ Shader "Justachae/FPANO/GlassSurface"
             float4 frag() : SV_Target { return 1; }
             ENDCG
         }
+        // window glass on the level (ThermalScene): an even colour into the lens camera's diffuse colour
+        Pass
+        {
+            Name "WORLDGLASS"
+            ZWrite Off
+            ZTest LEqual
+            Cull Off
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            float4 _ThermalWorldGlass;
+            float4 vert(float4 vertex : POSITION) : SV_POSITION { return UnityObjectToClipPos(vertex.xyz); }
+            float4 frag() : SV_Target { return _ThermalWorldGlass; }
+            ENDCG
+        }
     }
 }

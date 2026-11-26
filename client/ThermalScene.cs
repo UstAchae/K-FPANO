@@ -1,0 +1,154 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
+
+namespace EnvgFusion;
+
+// What the thermal lens camera must see differently from the eye (the user's, 2026-11-26: "我只要挡住玻璃，不画墙壁上的涂鸦和
+// 字"): long-wave infrared does not pass window glass, and paint on a wall is the wall's own temperature. The game's own
+// thermal (the T-7's) gets both from its switch (_ThermalVisionOn), which has every surface draw its material's
+// preset "temperature" instead of its colour, and so flattens everything else too; here the colour stays (the picture
+// as before) and only these two are changed:
+// - decals (the renderers whose every material is drawn by a decal shader: graffiti, signs, stains) are left out of the
+//   lens camera's render (hidden for it alone, shown again right after);
+// - window glass (see-through materials the game gives a thermal temperature, the ones its T-7 draws solid) is drawn
+//   into the lens camera's diffuse colour as an even surface, against its depth, before the colour is copied.
+// Which renderers those are is found once per level scene as it loads (not while playing) and kept.
+internal static class ThermalScene
+{
+    internal struct Part
+    {
+        public Renderer Renderer;
+        public int Sub;
+    }
+    internal static readonly List<Renderer> Decals = new List<Renderer>();
+    internal static readonly List<Part> Glass = new List<Part>();
+    internal static System.Action<string>? Note;
+    private static readonly List<Renderer> _hidden = new List<Renderer>();
+    private static readonly List<Renderer> _found = new List<Renderer>();
+    private static readonly List<Material> _materials = new List<Material>();
+    private static bool _hooked, _gone;
+    private static readonly System.Predicate<Renderer> DecalGone = r => r == null;
+    private static readonly System.Predicate<Part> GlassGone = p => p.Renderer == null;
+
+    // see-through shaders that are not window glass (effects, sights' own glass, water, weather)
+    private static readonly string[] NotGlass = { "particle", "laser", "flare", "smoke", "snow", "rain", "collimator", "optic", "cw fx", "water", "shitonscreen", "glitch", "pillar", "tripwire", "sky", "cloud", "fire", "spark" };
+
+    internal static void Hook()
+    {
+        if (_hooked)
+            return;
+        _hooked = true;
+        SceneManager.sceneLoaded += (scene, mode) => Collect(scene);
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+            Collect(SceneManager.GetSceneAt(i));
+    }
+
+    private static bool Has(string name, string[] any)
+    {
+        foreach (string a in any)
+            if (name.IndexOf(a, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        return false;
+    }
+
+    private static void Collect(Scene scene)
+    {
+        if (!scene.IsValid() || !scene.isLoaded)
+            return;
+        Decals.RemoveAll(DecalGone);
+        Glass.RemoveAll(GlassGone);
+        int decals = 0, glass = 0;
+        try
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                _found.Clear();
+                root.GetComponentsInChildren(true, _found);
+                foreach (Renderer r in _found)
+                {
+                    if (r == null || r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer)
+                        continue;
+                    _materials.Clear();
+                    r.GetSharedMaterials(_materials);
+                    if (_materials.Count == 0)
+                        continue;
+                    bool allDecal = true;
+                    for (int sub = 0; sub < _materials.Count; sub++)
+                    {
+                        Material m = _materials[sub];
+                        string shader = m != null && m.shader != null ? m.shader.name : "";
+                        if (shader.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) < 0)
+                            allDecal = false;
+                        if (m != null && m.renderQueue >= 2500 && m.HasProperty("_Temperature") && !Has(shader, NotGlass))
+                        {
+                            Glass.Add(new Part { Renderer = r, Sub = sub });
+                            glass++;
+                        }
+                    }
+                    if (allDecal)
+                    {
+                        Decals.Add(r);
+                        decals++;
+                    }
+                }
+            }
+        }
+        catch (System.Exception e)
+        {
+            Note?.Invoke("thermal scene: " + scene.name + " not read: " + e.Message);
+        }
+        _found.Clear();
+        _materials.Clear();
+        if (decals > 0 || glass > 0)
+            Note?.Invoke("thermal scene " + scene.name + ": " + decals + " decal renderer(s) left out of the thermal lens's view, " + glass + " window glass part(s) drawn solid for it (" + Decals.Count + " and " + Glass.Count + " in all)");
+    }
+
+    // the decals hidden for the lens camera's render (put back by ShowDecals right after it)
+    internal static int HideDecals()
+    {
+        _hidden.Clear();
+        foreach (Renderer r in Decals)
+        {
+            if (r == null)
+            {
+                _gone = true;
+                continue;
+            }
+            if (!r.enabled || r.forceRenderingOff || !r.isVisible)
+                continue;
+            r.forceRenderingOff = true;
+            _hidden.Add(r);
+        }
+        return _hidden.Count;
+    }
+
+    internal static void ShowDecals()
+    {
+        foreach (Renderer r in _hidden)
+            if (r != null)
+                r.forceRenderingOff = false;
+        _hidden.Clear();
+        if (_gone)
+        {
+            _gone = false;
+            Decals.RemoveAll(DecalGone);
+        }
+    }
+
+    // the window glass in view drawn with the given material's pass (an even colour, against the depth bound)
+    internal static int DrawGlass(CommandBuffer cb, Material material, int pass)
+    {
+        int n = 0;
+        foreach (Part p in Glass)
+        {
+            Renderer r = p.Renderer;
+            if (r == null || !r.enabled || !r.isVisible || !r.gameObject.activeInHierarchy)
+                continue;
+            cb.DrawRenderer(r, material, p.Sub, pass);
+            n++;
+        }
+        return n;
+    }
+}

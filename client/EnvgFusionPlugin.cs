@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.70";
+    public const string Version = "0.2.71";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -126,6 +126,8 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         CollimatorSight.OnCollimatorEnabled += EnvgFusion.SightEnabled;
         CollimatorSight.OnCollimatorDisabled += EnvgFusion.SightDisabled;
         EnvgChain.Note = text => Log?.LogInfo(text);
+        ThermalScene.Note = text => Log?.LogInfo(text);
+        ThermalScene.Hook();
         var harmony = new Harmony(Guid);
         MethodInfo? final = AccessTools.Method(typeof(SSAAImpl), "OnRenderImage");
         if (final != null)
@@ -1112,18 +1114,12 @@ internal static class EnvgFusion
         _idle = true;
         _mainCopy?.Clear();
         _motionCopy?.Clear();
-        _lensAfter?.Clear();
         _grassMaskCb?.Clear();
 
     }
 
     private static void Release()
     {
-        if (_lensAfter != null && _lensAfterCamera != null)
-            _lensAfterCamera.RemoveCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
-        _lensAfter?.Release();
-        _lensAfter = null;
-        _lensAfterCamera = null;
         if (_mainCopy != null && _mainCopyCamera != null)
             _mainCopyCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
         if (_motionCopy != null && _motionCamera != null)
@@ -1226,8 +1222,6 @@ internal static class EnvgFusion
     {
         if (!Active && _mainCopy != null && camera == _mainCopyCamera)
             _mainCopy.Clear();
-        if (!Active && _lensAfter != null && camera == _lensAfterCamera)
-            _lensAfter.Clear();
         if (!Active || camera != _main || _main == null || Material == null)
             return;
         if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
@@ -1735,17 +1729,14 @@ internal static class EnvgFusion
         return cam;
     }
 
-    // (the game's thermal switch, as its ThermalVision sets it around the T-7's camera: the game's shaders draw
-    // themselves for thermal while it is on: window glass solid, as long-wave infrared sees it, and so on)
-    private static readonly int ThermalVisionOnId = Shader.PropertyToID("_ThermalVisionOn");
-    private static bool _loggedSwitch;
+    private static bool _loggedDecalGlass;
     private static void RenderLens(Camera cam)
     {
         // (no shadows, as the T-7: its ThermalVision sets the shadow distance to 0 while it renders)
         float keep = QualitySettings.shadowDistance;
         QualitySettings.shadowDistance = 0f;
-        float switchWas = Shader.GetGlobalFloat(ThermalVisionOnId);
-        Shader.SetGlobalFloat(ThermalVisionOnId, 1f);
+        // (the decals left out for this camera alone: paint on a wall is the wall's temperature)
+        int hidden = ThermalScene.HideDecals();
         try
         {
             cam.Render();
@@ -1757,12 +1748,12 @@ internal static class EnvgFusion
         finally
         {
             QualitySettings.shadowDistance = keep;
-            Shader.SetGlobalFloat(ThermalVisionOnId, switchWas);
+            ThermalScene.ShowDecals();
         }
-        if (!_loggedSwitch)
+        if (!_loggedDecalGlass && (hidden > 0 || _worldGlassDrawn > 0))
         {
-            _loggedSwitch = true;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: rendered with the game's thermal switch on (_ThermalVisionOn, as the T-7's camera), its surfaces' heat taken after the glass and the other see-through things are drawn");
+            _loggedDecalGlass = true;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + hidden + " decal(s) in view left out of its render, " + _worldGlassDrawn + " window glass part(s) in view drawn solid");
         }
         if (!_loggedLensGrass && _lensGrassDraws > 0)
         {
@@ -2050,8 +2041,30 @@ internal static class EnvgFusion
         _lensTarget = null;
     }
 
-    private static CommandBuffer? _lensAfter;
-    private static Camera? _lensAfterCamera;
+    // window glass (ThermalScene): an even surface in the lens camera's diffuse colour, against its depth, so the
+    // heat behind it is not seen (long-wave infrared does not pass glass); a mid grey, a pane of the air's warmth
+    private static readonly int WorldGlassId = Shader.PropertyToID("_ThermalWorldGlass");
+    private static int _worldGlassDrawn, _worldGlassPass = -2;
+    private static Material? _worldGlassMaterial;
+    private static void DrawWorldGlass(CommandBuffer cb)
+    {
+        if (_worldGlassPass == -2)
+        {
+            Shader? shader = BundleShader("Justachae/FPANO/GlassSurface");
+            if (shader != null && shader.isSupported)
+                _worldGlassMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
+            _worldGlassPass = _worldGlassMaterial != null ? _worldGlassMaterial.FindPass("WORLDGLASS") : -1;
+            if (_worldGlassPass < 0)
+                EnvgFusionPlugin.Log?.LogWarning("F-PANO: the glass shader has no world glass pass: window glass not drawn");
+        }
+        _worldGlassDrawn = 0;
+        if (_worldGlassPass < 0 || _worldGlassMaterial == null)
+            return;
+        cb.SetRenderTarget(BuiltinRenderTextureType.GBuffer0, BuiltinRenderTextureType.CameraTarget);
+        cb.SetGlobalVector(WorldGlassId, new Vector4(0.4f, 0.4f, 0.4f, 1f));
+        _worldGlassDrawn = ThermalScene.DrawGlass(cb, _worldGlassMaterial, _worldGlassPass);
+    }
+
     private static void CopyMain(Camera source, Camera main, RenderTexture picture, RenderTexture normals, RenderTexture depth, RenderTexture albedo, RenderTexture specular, Vector2 jitter)
     {
         bool lens = source != main;
@@ -2070,43 +2083,18 @@ internal static class EnvgFusion
         _mainCopy.SetGlobalVector(FootprintId, lens ? new Vector4(1f / normals.width, 1f / normals.height, 0f, 0f) : new Vector4(_crop.z / normals.width, _crop.w / normals.height, 0f, 0f));
         _mainCopy.Blit(BuiltinRenderTextureType.CameraTarget, picture, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer2, normals, Material, 25);
+        if (lens)
+            DrawWorldGlass(_mainCopy);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, albedo, Material, 25);
         _mainCopy.Blit(BuiltinRenderTextureType.GBuffer1, specular, Material, 25);
         _mainCopy.Blit(normals, depth, Material, 12);
         DrawBodies(_mainCopy);
         if (lens)
             DrawGlass(_mainCopy, depth, jitter);
-        if (lens)
-            // (as the T-7's ThermalVision: the diffuse colour as the picture, the see-through things drawn over it
-            // with the game's thermal switch on, and read back after them as the surfaces' heat (_lensAfter))
-            _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, BuiltinRenderTextureType.CameraTarget);
         else
             DrawScopeLens(_mainCopy, source, jitter, lens);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);
         _mainCopy.SetGlobalVector(SrcCropId, Vector4.zero);
-        if (lens)
-        {
-            if (_lensAfter == null || _lensAfterCamera != source)
-            {
-                if (_lensAfter != null && _lensAfterCamera != null)
-                    _lensAfterCamera.RemoveCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
-                _lensAfter ??= new CommandBuffer { name = "Justachae F-PANO thermal surfaces after glass" };
-                source.AddCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
-                _lensAfterCamera = source;
-            }
-            _lensAfter.Clear();
-            _lensAfter.SetGlobalVector(JitterId, new Vector4(jitter.x, jitter.y, 0f, 0f));
-            _lensAfter.SetGlobalVector(SrcCropId, new Vector4(0f, 0f, 1f, 1f));
-            _lensAfter.SetGlobalVector(FootprintId, new Vector4(1f / normals.width, 1f / normals.height, 0f, 0f));
-            _lensAfter.Blit(BuiltinRenderTextureType.CameraTarget, albedo, Material, 25);
-            _lensAfter.SetGlobalVector(JitterId, Vector4.zero);
-            _lensAfter.SetGlobalVector(SrcCropId, Vector4.zero);
-        }
-        else if (_lensAfter != null && _lensAfterCamera != null)
-        {
-            _lensAfterCamera.RemoveCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
-            _lensAfterCamera = null;
-        }
 
         // the motion of people: the main camera's own vectors (the lens camera, rendered by hand, has none worth the
         // name), at the same place on the screen through the crop
