@@ -21,6 +21,8 @@ internal static class ThermalScene
     {
         public Renderer Renderer;
         public int Sub;
+        public Mesh Mesh;
+        public EFT.Interactive.WindowBreaker? Breaker;
     }
     internal static readonly List<Renderer> Decals = new List<Renderer>();
     internal static readonly List<Part> Glass = new List<Part>();
@@ -83,7 +85,14 @@ internal static class ThermalScene
                             allDecal = false;
                         if (m != null && m.renderQueue >= 2500 && m.HasProperty("_Temperature") && !Has(shader, NotGlass))
                         {
-                            Glass.Add(new Part { Renderer = r, Sub = sub });
+                            // (by its mesh: most windows' own renderers are switched off and drawn by the game's
+                            // WindowsManager, instanced, for the main and optic cameras only)
+                            Mesh? mesh = r is MeshRenderer && r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
+                            int at = r.isPartOfStaticBatch ? ((MeshRenderer)r).subMeshStartIndex + sub : sub;
+                            if (mesh == null || at >= mesh.subMeshCount)
+                                continue;
+                            r.TryGetComponent(out EFT.Interactive.WindowBreaker breaker);
+                            Glass.Add(new Part { Renderer = r, Sub = at, Mesh = mesh, Breaker = breaker });
                             glass++;
                         }
                     }
@@ -137,16 +146,24 @@ internal static class ThermalScene
         }
     }
 
-    // the window glass in view drawn with the given material's pass (an even colour, against the depth bound)
-    internal static int DrawGlass(CommandBuffer cb, Material material, int pass)
+    // the window glass in the camera's view drawn with the given material's pass (an even colour, against the depth
+    // bound); a window hit (cracked or broken by the game's WindowBreaker) is left out
+    private static readonly Plane[] _planes = new Plane[6];
+    private const float GlassReach = 400f;
+    internal static int DrawGlass(CommandBuffer cb, Material material, int pass, Camera camera)
     {
+        GeometryUtility.CalculateFrustumPlanes(camera, _planes);
+        Vector3 at = camera.transform.position;
         int n = 0;
         foreach (Part p in Glass)
         {
             Renderer r = p.Renderer;
-            if (r == null || !r.enabled || !r.isVisible || !r.gameObject.activeInHierarchy)
+            if (r == null || p.Mesh == null || !r.gameObject.activeInHierarchy || (p.Breaker != null && p.Breaker.IsDamaged))
                 continue;
-            cb.DrawRenderer(r, material, p.Sub, pass);
+            Bounds b = r.bounds;
+            if ((b.center - at).sqrMagnitude > GlassReach * GlassReach || !GeometryUtility.TestPlanesAABB(_planes, b))
+                continue;
+            cb.DrawMesh(p.Mesh, r.isPartOfStaticBatch ? Matrix4x4.identity : r.localToWorldMatrix, material, p.Sub, pass);
             n++;
         }
         return n;
