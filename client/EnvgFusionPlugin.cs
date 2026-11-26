@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.80";
+    public const string Version = "0.2.81";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -160,6 +160,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 
     private void Update()
     {
+        BrnvgLink.Ensure();
         bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)
             || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);   // (Ctrl + ← →: the rails' lights)
         FpanoLights.Update();
@@ -787,6 +788,9 @@ internal static class EnvgFusion
 
     private static readonly int I2DimId = Shader.PropertyToID("_EnvgI2Dim");
     // (no battery in the rails: the tubes dark)
+    // the tubes' gain over the game's own night vision, without K-3PS-C's eyepieces: full (the gain keys act only in
+    // the eyepieces, the user's 2026-11-26)
+    private static float FallbackGain => (EnvgbDown && Unpowered ? 0f : 1f);
     internal static float I2Gain => EnvgbDown && Unpowered ? 0f : EnvgFusionPlugin.GainNow;
 
 
@@ -833,8 +837,11 @@ internal static class EnvgFusion
     internal static void SetWhitePhosphor()
     {
         // (the device up, off or not worn: ours off the camera)
-        if (_wpPropagator != null && (!WhitePhosphorOn || _main == null || _wpPropagator.gameObject != _main.gameObject))
+        if (_wpPropagator != null && (!WhitePhosphorOn || _main == null || _wpPropagator.gameObject != _main.gameObject || BrnvgLink.Joined))
             ReleaseWhitePhosphor();
+        // (BorkelRNVG draws the goggle, with our colour: nothing of ours on the game's night vision as well)
+        if (BrnvgLink.Joined)
+            return;
         // (another device's own night vision is left alone; the F-PANO's tubes are the white phosphor's)
         if (!WhitePhosphorOn || _main == null || (GameNightVisionOn(_main) && !EnvgbDown) || EyepieceLink.ClaimedRecently)
             return;
@@ -843,7 +850,7 @@ internal static class EnvgFusion
             return;
         bool abc = _abcBuilt >= 1;   // measured at least once
         _i2Material!.SetTexture(AbcId, AbcB);
-        _i2Material!.SetVector(I2Id, new Vector4(100f * (EnvgFusionPlugin.TubeBrightness?.Value ?? 1f) * I2Gain, EnvgFusionPlugin.I2Noise?.Value ?? 1f, 0f, 1.5f));
+        _i2Material!.SetVector(I2Id, new Vector4(100f * (EnvgFusionPlugin.TubeBrightness?.Value ?? 1f) * FallbackGain, EnvgFusionPlugin.I2Noise?.Value ?? 1f, 0f, 1.5f));
         _i2Material.SetVector(I2TimeId, new Vector4(Mathf.Floor(Time.time * 30f) % 1024f, abc ? 1f : 0f, 0f, 0f));
         propagator.SetNightVisionMaterial(_i2Material);
         _wpPropagator = propagator;
