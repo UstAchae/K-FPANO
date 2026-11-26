@@ -12,8 +12,11 @@ namespace EnvgFusion;
 // as before) and only these two are changed:
 // - decals (the renderers whose every material is drawn by a decal shader: graffiti, signs, stains) are left out of the
 //   lens camera's render (hidden for it alone, shown again right after);
-// - window glass (see-through materials the game gives a thermal temperature, the ones its T-7 draws solid) is drawn
-//   into the lens camera's diffuse colour as an even surface, against its depth, before the colour is copied.
+// - window glass (the renderers the game's own WindowsManager takes as windows, by its own test: one material, its
+//   window glass shader; it switches them off and draws them itself, for the main and optic cameras only) is drawn by
+//   its mesh into the lens camera's diffuse colour as an even surface, against its depth, before the colour is copied.
+//   (Chosen by any see-through material with a thermal temperature, 0.1.22 took hundreds of puddles and stains as
+//   glass, a grey over the picture, and missed the windows, whose shader has none.)
 // Which renderers those are is found once per level scene as it loads (not while playing) and kept.
 internal static class ThermalScene
 {
@@ -34,9 +37,6 @@ internal static class ThermalScene
     private static readonly System.Predicate<Renderer> DecalGone = r => r == null;
     private static readonly System.Predicate<Part> GlassGone = p => p.Renderer == null;
 
-    // see-through shaders that are not window glass (effects, sights' own glass, water, weather)
-    private static readonly string[] NotGlass = { "particle", "laser", "flare", "smoke", "snow", "rain", "collimator", "optic", "cw fx", "water", "shitonscreen", "glitch", "pillar", "tripwire", "sky", "cloud", "fire", "spark" };
-
     internal static void Hook()
     {
         if (_hooked)
@@ -45,14 +45,6 @@ internal static class ThermalScene
         SceneManager.sceneLoaded += (scene, mode) => Collect(scene);
         for (int i = 0; i < SceneManager.sceneCount; i++)
             Collect(SceneManager.GetSceneAt(i));
-    }
-
-    private static bool Has(string name, string[] any)
-    {
-        foreach (string a in any)
-            if (name.IndexOf(a, System.StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-        return false;
     }
 
     private static void Collect(Scene scene)
@@ -83,10 +75,9 @@ internal static class ThermalScene
                         string shader = m != null && m.shader != null ? m.shader.name : "";
                         if (shader.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) < 0)
                             allDecal = false;
-                        if (m != null && m.renderQueue >= 2500 && m.HasProperty("_Temperature") && !Has(shader, NotGlass))
+                        if (sub == 0 && r is MeshRenderer && WindowsManager.IsManagedByWindowsManager(r))
                         {
-                            // (by its mesh: most windows' own renderers are switched off and drawn by the game's
-                            // WindowsManager, instanced, for the main and optic cameras only)
+                            // (by its mesh: the game has switched its renderer off)
                             Mesh? mesh = r is MeshRenderer && r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
                             int at = r.isPartOfStaticBatch ? ((MeshRenderer)r).subMeshStartIndex + sub : sub;
                             if (mesh == null || at >= mesh.subMeshCount)
