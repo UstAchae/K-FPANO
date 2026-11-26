@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
@@ -138,7 +139,10 @@ internal static class ThermalScene
     }
 
     // the window glass in the camera's view drawn with the given material's pass (an even colour, against the depth
-    // bound); a window hit (cracked or broken by the game's WindowBreaker) is left out
+    // bound); of a window the game's WindowBreaker has broken, the pieces still stuck in the frame (each its own mesh,
+    // where the game placed it), not the whole pane (the user's: a pane partly broken let the whole of it through)
+    private static readonly AccessTools.FieldRef<EFT.Interactive.WindowBreaker, EFT.Interactive.WindowBreaker.Piece[]> PiecesOf =
+        AccessTools.FieldRefAccess<EFT.Interactive.WindowBreaker, EFT.Interactive.WindowBreaker.Piece[]>("_pieces");
     private static readonly Plane[] _planes = new Plane[6];
     private const float GlassReach = 400f;
     internal static int DrawGlass(CommandBuffer cb, Material material, int pass, Camera camera)
@@ -149,12 +153,37 @@ internal static class ThermalScene
         foreach (Part p in Glass)
         {
             Renderer r = p.Renderer;
-            if (r == null || p.Mesh == null || !r.gameObject.activeInHierarchy || (p.Breaker != null && p.Breaker.IsDamaged))
+            if (r == null || p.Mesh == null || !r.gameObject.activeInHierarchy)
                 continue;
+            if (p.Breaker != null && p.Breaker.IsDamaged)
+            {
+                n += DrawPieces(cb, material, pass, p.Breaker, at);
+                continue;
+            }
             Bounds b = r.bounds;
             if ((b.center - at).sqrMagnitude > GlassReach * GlassReach || !GeometryUtility.TestPlanesAABB(_planes, b))
                 continue;
             cb.DrawMesh(p.Mesh, r.isPartOfStaticBatch ? Matrix4x4.identity : r.localToWorldMatrix, material, p.Sub, pass);
+            n++;
+        }
+        return n;
+    }
+
+    private static int DrawPieces(CommandBuffer cb, Material material, int pass, EFT.Interactive.WindowBreaker breaker, Vector3 at)
+    {
+        EFT.Interactive.WindowBreaker.Piece[]? pieces = PiecesOf(breaker);
+        if (pieces == null || (breaker.transform.position - at).sqrMagnitude > GlassReach * GlassReach)
+            return 0;
+        int n = 0;
+        foreach (EFT.Interactive.WindowBreaker.Piece piece in pieces)
+        {
+            if (piece == null || !piece.Stuck)
+                continue;
+            MeshFilter? filter = piece.Description.MeshFilter;
+            GameObject? go = piece.Description.GameObject;
+            if (filter == null || go == null || !go.activeInHierarchy || filter.sharedMesh == null)
+                continue;
+            cb.DrawMesh(filter.sharedMesh, filter.transform.localToWorldMatrix, material, 0, pass);
             n++;
         }
         return n;
