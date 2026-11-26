@@ -13,8 +13,8 @@ namespace EnvgFusion;
 // as before) and only these two are changed:
 // - decals (the renderers whose every material is drawn by a decal shader: graffiti, signs, stains) are left out of the
 //   lens camera's render (hidden for it alone, shown again right after);
-// - window glass (the materials the game's own WindowsManager takes as window glass, by its own test: its window glass
-//   shader; single-material windows it switches off and draws itself, for the main and optic cameras only) is drawn by
+// - window glass (materials whose shader the T-7 shows solid, see SolidForThermal; the WindowsManager switches
+//   single-material windows off and draws them itself, for the main and optic cameras only) is drawn by
 //   its mesh into the lens camera's diffuse colour as an even surface, against its depth, before the colour is copied.
 //   (Chosen by any see-through material with a thermal temperature, 0.1.22 took hundreds of puddles and stains as
 //   glass, a grey over the picture, and missed the windows, whose shader has none.)
@@ -48,18 +48,17 @@ internal static class ThermalScene
             Collect(SceneManager.GetSceneAt(i));
     }
 
-    // other see-through glass on the levels, not the WindowsManager's shader (Interchange: glass_03 on Standard,
-    // Popcorn_Glass, goshan_glass on Custom/Glass2): a see-through material named glass, not a sight's lens or the
-    // distortion drawn over broken glass
-    private static bool OtherGlass(Material m, string shader)
+    // the see-through shaders the T-7 shows solid: under the game's thermal switch (_ThermalVisionOn) their pixel
+    // programs force the alpha to 1 (read from the game's own compiled shaders, 2026-11-26): the window glass (also
+    // what the WindowsManager draws instanced), the other reflective glass (black, opaque) and DepthZwrite (its own
+    // temperature, opaque). Others only change their colour (Standard, AlphaBumpedFresnel, WireNetting) or do not
+    // react at all (Custom/Glass2), so the T-7 sees through them, and so does the thermal lens here.
+    private static readonly HashSet<string> SolidForThermal = new HashSet<string>
     {
-        if (m.renderQueue < 2500)
-            return false;
-        if (m.name.IndexOf("glass", System.StringComparison.OrdinalIgnoreCase) < 0 && shader.IndexOf("glass", System.StringComparison.OrdinalIgnoreCase) < 0)
-            return false;
-        return shader.IndexOf("optic", System.StringComparison.OrdinalIgnoreCase) < 0 && shader.IndexOf("collimator", System.StringComparison.OrdinalIgnoreCase) < 0
-            && shader.IndexOf("distort", System.StringComparison.OrdinalIgnoreCase) < 0 && m.name.IndexOf("scope", System.StringComparison.OrdinalIgnoreCase) < 0;
-    }
+        "Global Fog/Transparent Reflective Specular",
+        "p0/Transparent/Reflective/Specular",
+        "Transparent/DepthZwrite",
+    };
 
     private static void Collect(Scene scene)
     {
@@ -89,10 +88,7 @@ internal static class ThermalScene
                         string shader = m != null && m.shader != null ? m.shader.name : "";
                         if (shader.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) < 0)
                             allDecal = false;
-                        // (the game's own test of a window glass material, WindowsManager.IsMaterialValid, for each
-                        // material: a renderer with more than one (the escalators' balustrades) is not the
-                        // WindowsManager's, drawn by itself, but its glass is glass all the same)
-                        if (r is MeshRenderer && m != null && (WindowsManager.IsMaterialValid(m) || OtherGlass(m, shader)))
+                        if (r is MeshRenderer && m != null && SolidForThermal.Contains(shader))
                         {
                             // (by its mesh: for the WindowsManager's windows the game has switched the renderer off)
                             Mesh? mesh = r is MeshRenderer && r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
