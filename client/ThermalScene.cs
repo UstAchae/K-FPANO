@@ -13,8 +13,8 @@ namespace EnvgFusion;
 // as before) and only these two are changed:
 // - decals (the renderers whose every material is drawn by a decal shader: graffiti, signs, stains) are left out of the
 //   lens camera's render (hidden for it alone, shown again right after);
-// - window glass (the renderers the game's own WindowsManager takes as windows, by its own test: one material, its
-//   window glass shader; it switches them off and draws them itself, for the main and optic cameras only) is drawn by
+// - window glass (the materials the game's own WindowsManager takes as window glass, by its own test: its window glass
+//   shader; single-material windows it switches off and draws itself, for the main and optic cameras only) is drawn by
 //   its mesh into the lens camera's diffuse colour as an even surface, against its depth, before the colour is copied.
 //   (Chosen by any see-through material with a thermal temperature, 0.1.22 took hundreds of puddles and stains as
 //   glass, a grey over the picture, and missed the windows, whose shader has none.)
@@ -76,9 +76,12 @@ internal static class ThermalScene
                         string shader = m != null && m.shader != null ? m.shader.name : "";
                         if (shader.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) < 0)
                             allDecal = false;
-                        if (sub == 0 && r is MeshRenderer && WindowsManager.IsManagedByWindowsManager(r))
+                        // (the game's own test of a window glass material, WindowsManager.IsMaterialValid, for each
+                        // material: a renderer with more than one (the escalators' balustrades) is not the
+                        // WindowsManager's, drawn by itself, but its glass is glass all the same)
+                        if (r is MeshRenderer && WindowsManager.IsMaterialValid(m))
                         {
-                            // (by its mesh: the game has switched its renderer off)
+                            // (by its mesh: for the WindowsManager's windows the game has switched the renderer off)
                             Mesh? mesh = r is MeshRenderer && r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
                             int at = r.isPartOfStaticBatch ? ((MeshRenderer)r).subMeshStartIndex + sub : sub;
                             if (mesh == null || at >= mesh.subMeshCount)
