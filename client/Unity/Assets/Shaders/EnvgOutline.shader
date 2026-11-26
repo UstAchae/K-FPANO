@@ -981,71 +981,7 @@ Shader "Justachae/FPANO/Outline"
                     native = lerp(air, native, exp(-d / max(_EnvgThermo.w, 1.0)));
                     return float4(native / 100.0, 0, native / 100.0, 1);
                 }
-                // vegetation: the grass is drawn for this camera in pure green (no red, no blue), which no level surface is
-                float veg = albedoRgb.g > 0.01 ? saturate(1.0 - max(albedoRgb.r, albedoRgb.b) / (0.05 * albedoRgb.g)) : 0.0;
-                float3 specular = tex2D(_EnvgSpecular, i.uv).rgb;
-                float spec = max(specular.r, max(specular.g, specular.b));
-                // the light absorbed, averaged over a few pixels: a wall or the ground conducts heat sideways, so a
-                // pattern of paint, a decal or a texture a few centimetres across doesn't make its own pattern of heat;
-                // whole lit faces, shade and shadows do
-                float lit = dot(max(tex2D(_EnvgLitSoft, i.uv).rgb, 0), lum);
-                float albedoSoft = dot(tex2D(_EnvgAlbedoSoft, i.uv).rgb, lum);
-                float reflects = saturate(albedoSoft + spec);
-                float arriving = lit / max(reflects, 0.05);
-                float absorbed = arriving * (1.0 - reflects);
-                // how much of the sky a surface sees, from its orientation over several pixels: a crown of a thousand
-                // leaf cards facing every way sees the sky as one mass (its leaves radiate to each other and share a
-                // temperature), a slope or a wall as itself
-                float4 ns = tex2D(_EnvgNormalsSoft, i.uv);
-                float3 nSoft = dot(ns.rgb, ns.rgb) > 1e-4 ? normalize(ns.rgb) : n;
-                float skyView = saturate((1.0 + nSoft.y) * 0.5);
-                // what a surface keeps of the day's heat (and how its emissivity differs) follows its material: darker
-                // stores more. At night, with nothing lit, this is what gives ground and walls their texture of heat.
-                // (from the colour averaged over a few pixels, like the light absorbed: a texture's pattern doesn't keep
-                // its own heat)
-                float residual = _EnvgThermo2.x * (0.5 - albedoSoft) * 2.0;
-                // leaves and grass (green surfaces): thin, transpiring, radiating to the sky from both sides: cooler
-                float3 softRgb = tex2D(_EnvgAlbedoSoft, i.uv).rgb;
-                float leafy = saturate((softRgb.g - max(softRgb.r * 0.95, softRgb.b * 1.2)) / max(softRgb.g, 0.02) * 6.0);
-                residual -= 2.0 * leafy;
-                float surface = air + residual + _EnvgThermo.y * absorbed - _EnvgThermo.z * skyView;
-                // grass and leaves: thin, with no heat stored and the soil's heat not reaching them, they radiate to the sky
-                // more than the ground does and sunlight warms them less (they transpire). Each blade by its own
-                // orientation (the per-pixel normal, not the smoothed one): a clump has its own pattern of heat.
-                float3 nb = normalize(g2.rgb * 2.0 - 1.0);
-                float bladeSky = saturate((1.0 + nb.y) * 0.5);
-                float vegetation = air + 0.3 * _EnvgThermo.y * absorbed - _EnvgThermo.z * (1.0 + bladeSky);
-                surface = lerp(surface, vegetation, veg);
-
-                // emissivity: dielectrics about 0.95, metals (high specular colour) down to about 0.15
-                // the ground is never one temperature: damp and dry soil, grass and bare earth, in patches of a few metres
-                // and smaller ones within them (fixed to the world, so they hold still as you move)
-                float3 wp = mul(_EnvgCamToWorld, float4(ray * d, 1.0)).xyz;
-                float patches = valueNoise(wp.xz / 2.2) * 0.45 + valueNoise(wp.xz / 0.8 + 17.0) * 0.35 + valueNoise(wp.xz / 0.3 + 41.0) * 0.2;
-                surface += (patches - 0.5) * 2.0 * _EnvgThermo2.z * saturate(nSoft.y * 1.5 - 0.3);
-
-                // foliage (a crown of needles, a bush): its surfaces face every way within a pixel or two (the normals
-                // of the surfaces around barely agree, unlike a wall, a rock or the ground under its bumps). Thin
-                // needles take the air's temperature within seconds, so a crown is one temperature, a little under the
-                // air by how much sky it sees as a whole; no texture of its own, no glints.
-                // (how much of the area around is such surfaces: a crown is a region of them, an object's edge only a thin line)
-                float foliage = smoothstep(0.15, 0.35, tex2D(_EnvgFoliage, i.uv).r) * (1.0 - veg);
-                // (grass and leaves, thin and transpiring, sit a couple of degrees under the soil they stand on)
-                surface = lerp(surface, air + 0.4 * residual - 1.5 - _EnvgThermo.z * skyView, foliage);
-
-                // people: their clothes and gear are warmed from inside, well above the air (about 28 C at the surface)
-                float body = saturate(tex2D(_EnvgBody, i.uv).r) * step(0.001, _EnvgThermo2.y);
-                surface = lerp(surface, lerp(air, 28.0, saturate(_EnvgThermo2.y)) + 5.0 * saturate(_EnvgThermo2.y - 1.0), body);
-                veg *= 1.0 - body;
-                foliage *= 1.0 - body;
-                float emissivity = lerp(lerp(lerp(lerp(0.95, 0.15, saturate((spec - 0.04) / 0.5)), 0.98, veg), 0.98, foliage), 0.95, body);
-                float3 r = reflect(dir, n);
-                float around = lerp(air, sky, saturate(r.y));
-                float apparent = emissivity * surface + (1.0 - emissivity) * around;
-
-                float t = lerp(air, apparent, exp(-d / max(_EnvgThermo.w, 1.0)));
-                t /= 100.0;
-                return float4(t, foliage, t, 1);
+                return float4(air / 100.0, 0, air / 100.0, 1);   // (never: the game's method is the only one)
             }
             ENDCG
         }

@@ -24,17 +24,16 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.69";
+    public const string Version = "0.2.70";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
     internal static ManualLogSource? Log;
     internal static ConfigEntry<bool>? On, WhitePhosphor, FromLens;
-    internal static ConfigEntry<float>? GrassAmount, ThermalField, Latency, MinSpread, GroundPatches, BodyHeat, ShapeNeedsHeat, Washout, Temporal, LineWidth, Brightness, Amount, TubeBrightness, Softness, Glow, Smoothing, AirTemperature, LightHeating, SkyCooling, I2Noise, HeatEdges, GeometryEdges, ResidualHeat, Declutter, LocalContrast;
+    internal static ConfigEntry<float>? GrassAmount, ThermalField, Latency, MinSpread, BodyHeat, ShapeNeedsHeat, Washout, Temporal, LineWidth, Brightness, Amount, TubeBrightness, Softness, Glow, Smoothing, AirTemperature, I2Noise, HeatEdges, GeometryEdges, Declutter, LocalContrast;
     internal static ConfigEntry<float>? SensorResolution;
     internal static ConfigEntry<int>? RenderScale;
-    internal static ConfigEntry<string>? Show, HeatSource;
-    internal const string SourceModel = "物理模型", SourceNative = "原版方法";
+    internal static ConfigEntry<string>? Show;
     internal const string ShowOutline = "轮廓", ShowFusion = "白热融合", ShowBlackHot = "黑热融合", ShowI2 = "纯夜视";
     // the device's four modes, in the order the arrow keys step through them
     internal static readonly string[] Modes = { ShowI2, ShowOutline, ShowFusion, ShowBlackHot };
@@ -57,11 +56,8 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
         Show = Config.Bind(Section, "显示内容", ShowOutline,
             new ConfigDescription("F-PANO 的四种模式（游戏里用 ← → 切换）：纯夜视：只有白磷夜视。轮廓：温差的边缘画成琥珀色的线。白热融合：整幅热像（热的亮）叠在夜视上。黑热融合：整幅热像（冷的亮，热的暗）叠在夜视上。",
                 new AcceptableValueList<string>(ShowI2, ShowOutline, ShowFusion, ShowBlackHot), new ConfigurationManagerAttributes { Order = 9 }));
-        HeatSource = Config.Bind(Section, "热像来源", SourceNative,
-            new ConfigDescription("物理模型：本模组按阳光、夜间散热、天空、植被、人体估算的温度。原版方法：照游戏原版热成像的做法，表面的热度取贴图颜色深浅，人按体温单独标热（用来对比）。三种热像模式都跟着变。",
-                new AcceptableValueList<string>(SourceModel, SourceNative), new ConfigurationManagerAttributes { Order = 8 }));
         GrassAmount = Config.Bind(Section, "草的轮廓强度", 2f,
-            new ConfigDescription("轮廓模式、热像来源为原版方法时，草比地面冷多少（°C）：草丛和草地边缘（路边、空地）的线由此而来。越大线越多越亮；0 是没有草的线（原版方法本来的样子）。",
+            new ConfigDescription("轮廓模式里，草比地面冷多少（°C）：草丛和草地边缘（路边、空地）的线由此而来。越大线越多越亮；0 是没有草的线（原版方法本来的样子）。",
                 new AcceptableValueRange<float>(0f, 5f), new ConfigurationManagerAttributes { Order = 8 }));
         NextMode = Config.Bind(Section, "下一个模式", new BepInEx.Configuration.KeyboardShortcut(KeyCode.RightArrow),
             new ConfigDescription("切到下一个模式（纯夜视 → 轮廓 → 白热融合 → 黑热融合）。", null, new ConfigurationManagerAttributes { Order = 8 }));
@@ -106,20 +102,12 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
             new ConfigDescription("热像镜头的衍射模糊。越大只剩大的温差轮廓。", new AcceptableValueRange<float>(0f, 6f), advanced));
         AirTemperature = Config.Bind(Advanced, "气温（°C）", 15f,
             new ConfigDescription("热像的基准温度。", new AcceptableValueRange<float>(-30f, 45f), advanced));
-        LightHeating = Config.Bind(Advanced, "光照升温（°C）", 15f,
-            new ConfigDescription("吸收的光让表面升温多少。", new AcceptableValueRange<float>(0f, 60f), advanced));
-        SkyCooling = Config.Bind(Advanced, "天空降温（°C）", 4f,
-            new ConfigDescription("朝天的表面比气温低多少。", new AcceptableValueRange<float>(0f, 15f), advanced));
-        ResidualHeat = Config.Bind(Advanced, "材质余热（°C）", 4f,
-            new ConfigDescription("白天存下的热：深色、厚重的表面（石头、土、树干、水泥）夜里比空气暖。按几像素内平均的颜色算，不会画出贴图花纹。", new AcceptableValueRange<float>(0f, 15f), advanced));
         ThermalField = Config.Bind(Advanced, "热像视场（相对夜视管）", 1f,
             new ConfigDescription("热像画面是夜视管圆形视野里的一个 4:3 矩形：1 是真机的比例：宽为夜视管视野直径的 0.68、高 0.52。矩形外只有夜视画面。0 是铺满全屏。", new AcceptableValueRange<float>(0f, 1.5f), advanced));
         Latency = Config.Bind(Advanced, "热像延迟（毫秒）", 0f,
             new ConfigDescription("非制冷热像探测器加数字处理和显示的延迟：转头时轮廓比夜视画面慢这么多。0 是不延迟。", new AcceptableValueRange<float>(0f, 60f), advanced));
         MinSpread = Config.Bind(Advanced, "热像增益上限（°C）", 3f,
             new ConfigDescription("热像增益的上限：整个画面温差小于这个值时（比如夜里），不会再把细小温差放大成满屏的线。", new AcceptableValueRange<float>(0.3f, 20f), advanced));
-        GroundPatches = Config.Bind(Advanced, "地面温度斑块（°C）", 2f,
-            new ConfigDescription("地面各处温度不一（干湿土、草和裸土交错）的幅度，几米大小的斑块，固定在地面上不随视角动。远处地面因此有零碎的斑点和短线。", new AcceptableValueRange<float>(0f, 5f), advanced));
         BodyHeat = Config.Bind(Advanced, "人体发热", 1f,
             new ConfigDescription("人（玩家、敌人，连同身上的装备）比环境热，在热像里最醒目。1 是衣物表面约 28°C，0 是不发热。", new AcceptableValueRange<float>(0f, 1.5f), advanced));
         ShapeNeedsHeat = Config.Bind(Advanced, "外形轮廓需温差", 1f,
@@ -305,57 +293,7 @@ internal static class EnvgFusion
     private static bool _motionReady, _loggedMotion;
     private static CommandBuffer? _motionCopy;
     private static readonly int AlbedoSoftId = Shader.PropertyToID("_EnvgAlbedoSoft");
-    private static bool _loggedSun;
 
-    // How much of the day's heat is left in the ground, stones, trunks and walls: all of it while the sun is up, then
-    // fading through the night (about 1/e every four hours after dusk at 19:00), so by dawn most things sit at the air's
-    // temperature and only bodies, engines and the cold sky stand out. From the game's own clock.
-    private static float _nightLeft = 1f;
-    private static int _nightFrame = -1;
-    private static bool _loggedNight;
-    private static float NightHeatLeft()
-    {
-        if (_nightFrame == Time.frameCount)
-            return _nightLeft;
-        _nightFrame = Time.frameCount;
-        float left = 1f;
-        try
-        {
-            if (Daylight() < 0.05f && Comfort.Common.Singleton<EFT.GameWorld>.Instantiated && Comfort.Common.Singleton<EFT.GameWorld>.Instance.GameDateTime != null)
-            {
-                System.DateTime clock = Comfort.Common.Singleton<EFT.GameWorld>.Instance.GameDateTime.Calculate();
-                float hour = clock.Hour + clock.Minute / 60f;
-                float sinceDusk = (hour - 19f + 24f) % 24f;
-                if (sinceDusk < 12f)
-                    left = Mathf.Exp(-sinceDusk / 4f);
-                if (!_loggedNight)
-                {
-                    _loggedNight = true;
-                    EnvgFusionPlugin.Log?.LogInfo("F-PANO night: game clock " + clock.ToString("HH:mm") + ", the day's heat left " + left.ToString("F2"));
-                }
-            }
-        }
-        catch (System.Exception)
-        {
-        }
-        _nightLeft = left;
-        return left;
-    }
-
-    // how much the sun is up and shining (0 at night): the scene's sun light, its intensity and its height
-    private static float Daylight()
-    {
-        Light? sun = RenderSettings.sun;
-        float day = 0f;
-        if (sun != null && sun.isActiveAndEnabled)
-            day = Mathf.Clamp01(sun.intensity) * Mathf.Clamp01(-sun.transform.forward.y * 4f);
-        if (!_loggedSun)
-        {
-            _loggedSun = true;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO daylight from " + (sun != null ? sun.name + " intensity " + sun.intensity.ToString("F2") + " height " + (-sun.transform.forward.y).ToString("F2") : "no sun") + ": " + day.ToString("F2"));
-        }
-        return day;
-    }
     // The instanced grass is drawn in two steps: its MotionVectors pass first writes its depth (GPUInstancer puts it in
     // a command buffer before the G-buffer), then its deferred pass draws only where that depth is (equal depth). The
     // thermal camera gets the first step here too, or the second draws almost nothing.
@@ -591,14 +529,8 @@ internal static class EnvgFusion
         t.Softness = EnvgFusionPlugin.Softness?.Value ?? 0.4f;
         t.Brightness = EnvgFusionPlugin.Brightness?.Value ?? 1f;
         t.GlowAmount = EnvgFusionPlugin.Glow?.Value ?? 0.6f;
-        float night = NightHeatLeft();
-        t.ResidualHeat = (EnvgFusionPlugin.ResidualHeat?.Value ?? 4f) * night;
         t.BodyHeat = EnvgFusionPlugin.BodyHeat?.Value ?? 1f;
-        t.GroundPatches = (EnvgFusionPlugin.GroundPatches?.Value ?? 2f) * (0.3f + 0.7f * night);
         t.Air = EnvgFusionPlugin.AirTemperature?.Value ?? 15f;
-        t.LightHeating = EnvgFusionPlugin.LightHeating?.Value ?? 15f;
-        t.Daylight = Daylight();
-        t.SkyCooling = EnvgFusionPlugin.SkyCooling?.Value ?? 4f;
         t.Smoothing = EnvgFusionPlugin.Smoothing?.Value ?? 1f;
         t.HeatEdges = EnvgFusionPlugin.HeatEdges?.Value ?? 1f;
         t.GeometryEdges = EnvgFusionPlugin.GeometryEdges?.Value ?? 0f;
@@ -608,7 +540,7 @@ internal static class EnvgFusion
         t.HeatTemporal = t.Temporal;
         t.Declutter = EnvgFusionPlugin.Declutter?.Value ?? 0f;
         t.MinSpread = EnvgFusionPlugin.MinSpread?.Value ?? 3f;
-        t.NativeMethod = EnvgFusionPlugin.HeatSource?.Value == EnvgFusionPlugin.SourceNative;
+        t.NativeMethod = true;   // the game's own method (the T-7's), the only one
         t.GrassGain = EnvgFusionPlugin.GrassAmount?.Value ?? 2f;
         // the grass from our model joins the game's method in the outline mode only
         t.NativeGrass = EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowOutline;
@@ -965,8 +897,7 @@ internal static class EnvgFusion
         });
     }
     private static readonly int GrassScreenId = Shader.PropertyToID("_EnvgGrassScreen");
-    internal static bool GrassMaskWanted => EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowOutline
-        && EnvgFusionPlugin.HeatSource?.Value == EnvgFusionPlugin.SourceNative;
+    internal static bool GrassMaskWanted => EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowOutline;
 
     private static void RecordGrassMask(System.Collections.IList list, int layerMask)
     {
@@ -1181,12 +1112,18 @@ internal static class EnvgFusion
         _idle = true;
         _mainCopy?.Clear();
         _motionCopy?.Clear();
+        _lensAfter?.Clear();
         _grassMaskCb?.Clear();
 
     }
 
     private static void Release()
     {
+        if (_lensAfter != null && _lensAfterCamera != null)
+            _lensAfterCamera.RemoveCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
+        _lensAfter?.Release();
+        _lensAfter = null;
+        _lensAfterCamera = null;
         if (_mainCopy != null && _mainCopyCamera != null)
             _mainCopyCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, _mainCopy);
         if (_motionCopy != null && _motionCamera != null)
@@ -1289,6 +1226,8 @@ internal static class EnvgFusion
     {
         if (!Active && _mainCopy != null && camera == _mainCopyCamera)
             _mainCopy.Clear();
+        if (!Active && _lensAfter != null && camera == _lensAfterCamera)
+            _lensAfter.Clear();
         if (!Active || camera != _main || _main == null || Material == null)
             return;
         if (EnvgFusionPlugin.Show?.Value == EnvgFusionPlugin.ShowI2 || EnvgPods.RightShown <= 0f)
@@ -1578,9 +1517,8 @@ internal static class EnvgFusion
                 if (!_loggedCorpse)
                 {
                     _loggedCorpse = true;
-                    // (the body's surface as the chosen heat source has it: the game's method 34 C, our model 28 C)
-                    bool native = EnvgFusionPlugin.HeatSource?.Value == EnvgFusionPlugin.SourceNative;
-                    float air = EnvgFusionPlugin.AirTemperature?.Value ?? 15f, alive = native ? 34f : 28f;
+                    // (the body's surface as the game's method has it: 34 C)
+                    float air = EnvgFusionPlugin.AirTemperature?.Value ?? 15f, alive = 34f;
                     EnvgFusionPlugin.Log?.LogInfo("F-PANO body heat: a body (" + dead.Profile?.Nickname + ") in the heat mask "
                         + ((now - corpse.Value) / 60.0).ToString("F0") + " game minutes after death, warmth " + left.ToString("F2") + " (about "
                         + (air + (alive - air) * left).ToString("F1") + " C at the surface against " + air.ToString("F0")
@@ -1797,12 +1735,17 @@ internal static class EnvgFusion
         return cam;
     }
 
+    // (the game's thermal switch, as its ThermalVision sets it around the T-7's camera: the game's shaders draw
+    // themselves for thermal while it is on: window glass solid, as long-wave infrared sees it, and so on)
+    private static readonly int ThermalVisionOnId = Shader.PropertyToID("_ThermalVisionOn");
+    private static bool _loggedSwitch;
     private static void RenderLens(Camera cam)
     {
-        bool shadows = EnvgFusionPlugin.HeatSource?.Value != EnvgFusionPlugin.SourceNative;
+        // (no shadows, as the T-7: its ThermalVision sets the shadow distance to 0 while it renders)
         float keep = QualitySettings.shadowDistance;
-        if (!shadows)
-            QualitySettings.shadowDistance = 0f;
+        QualitySettings.shadowDistance = 0f;
+        float switchWas = Shader.GetGlobalFloat(ThermalVisionOnId);
+        Shader.SetGlobalFloat(ThermalVisionOnId, 1f);
         try
         {
             cam.Render();
@@ -1813,13 +1756,18 @@ internal static class EnvgFusion
         }
         finally
         {
-            if (!shadows)
-                QualitySettings.shadowDistance = keep;
+            QualitySettings.shadowDistance = keep;
+            Shader.SetGlobalFloat(ThermalVisionOnId, switchWas);
+        }
+        if (!_loggedSwitch)
+        {
+            _loggedSwitch = true;
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: rendered with the game's thermal switch on (_ThermalVisionOn, as the T-7's camera), its surfaces' heat taken after the glass and the other see-through things are drawn");
         }
         if (!_loggedLensGrass && _lensGrassDraws > 0)
         {
             _loggedLensGrass = true;
-            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + _lensGrassDraws + " instanced draws (grass, trees) given to it as well; shadows " + (shadows ? "on" : "off (the game's method)"));
+            EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + _lensGrassDraws + " instanced draws (grass, trees) given to it as well");
         }
     }
 
@@ -2102,6 +2050,8 @@ internal static class EnvgFusion
         _lensTarget = null;
     }
 
+    private static CommandBuffer? _lensAfter;
+    private static Camera? _lensAfterCamera;
     private static void CopyMain(Camera source, Camera main, RenderTexture picture, RenderTexture normals, RenderTexture depth, RenderTexture albedo, RenderTexture specular, Vector2 jitter)
     {
         bool lens = source != main;
@@ -2126,10 +2076,37 @@ internal static class EnvgFusion
         DrawBodies(_mainCopy);
         if (lens)
             DrawGlass(_mainCopy, depth, jitter);
+        if (lens)
+            // (as the T-7's ThermalVision: the diffuse colour as the picture, the see-through things drawn over it
+            // with the game's thermal switch on, and read back after them as the surfaces' heat (_lensAfter))
+            _mainCopy.Blit(BuiltinRenderTextureType.GBuffer0, BuiltinRenderTextureType.CameraTarget);
         else
             DrawScopeLens(_mainCopy, source, jitter, lens);
         _mainCopy.SetGlobalVector(JitterId, Vector4.zero);
         _mainCopy.SetGlobalVector(SrcCropId, Vector4.zero);
+        if (lens)
+        {
+            if (_lensAfter == null || _lensAfterCamera != source)
+            {
+                if (_lensAfter != null && _lensAfterCamera != null)
+                    _lensAfterCamera.RemoveCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
+                _lensAfter ??= new CommandBuffer { name = "Justachae F-PANO thermal surfaces after glass" };
+                source.AddCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
+                _lensAfterCamera = source;
+            }
+            _lensAfter.Clear();
+            _lensAfter.SetGlobalVector(JitterId, new Vector4(jitter.x, jitter.y, 0f, 0f));
+            _lensAfter.SetGlobalVector(SrcCropId, new Vector4(0f, 0f, 1f, 1f));
+            _lensAfter.SetGlobalVector(FootprintId, new Vector4(1f / normals.width, 1f / normals.height, 0f, 0f));
+            _lensAfter.Blit(BuiltinRenderTextureType.CameraTarget, albedo, Material, 25);
+            _lensAfter.SetGlobalVector(JitterId, Vector4.zero);
+            _lensAfter.SetGlobalVector(SrcCropId, Vector4.zero);
+        }
+        else if (_lensAfter != null && _lensAfterCamera != null)
+        {
+            _lensAfterCamera.RemoveCommandBuffer(CameraEvent.AfterForwardAlpha, _lensAfter);
+            _lensAfterCamera = null;
+        }
 
         // the motion of people: the main camera's own vectors (the lens camera, rendered by hand, has none worth the
         // name), at the same place on the screen through the crop
