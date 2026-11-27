@@ -77,7 +77,7 @@ This is a test version: the mod is still being tested in game, and things may ch
 
 - 热像用物体表面自己的明暗，人体按约 34 °C 标出，轮廓模式里另外画草的轮廓。
 - 和真实热像一样：窗户玻璃不透，画成一块均匀的面；墙上的字、涂鸦等贴花不出现在热像里。
-- 按真实的方式画：在夜视仪的热像物镜处（右内侧镜筒上方）放一台相机，按传感器的分辨率（每度 16 像素）拍场景，朝向和眼睛一致。近处的东西出现在物镜看到的位置，所以枪上的瞄具挡住热像的地方比挡住眼睛的地方偏下；瞄具的倍率不会放大热像。这台相机每帧约 1.5 毫秒（在藏身处测得）。F12 高级里「热像从物镜位置拍（真实画法）」可以关掉，关掉后热像取自眼睛这台相机。
+- 按真实的方式画：在夜视仪的热像物镜处（右内侧镜筒上方）放一台相机，按传感器的分辨率（每度 16 像素）拍场景，朝向和眼睛一致。近处的东西出现在物镜看到的位置，所以枪上的瞄具挡住热像的地方比挡住眼睛的地方偏下；瞄具的倍率不会放大热像。F12 高级里「热像从物镜位置拍（真实画法）」可以关掉，关掉后热像取自眼睛这台相机。
 - 瞄具的玻璃（红点、全息、倍镜）和窗户玻璃一样，热像透不过去，画成一块不透的面。
 - 枪和手只用当前一帧的热像，晃枪时不会拖影。
 
@@ -97,8 +97,9 @@ Models: 3D Military Assets (3DMA), L3Harris F-PANO NVGs and Ops-Core RAILINK Dat
 
 - 配合 **K-3PS-C 1.9.0 beta 1 或更新版本**：F-PANO 通过四个镜筒的目镜成像，双眼合并，支架可调，热像画在右内侧镜筒里，大小和位置按眼睛实际看到的镜片来定。
 - 用旧版 K-3PS-C（最后一个正式版是 1.8.2）或不装：F-PANO 用游戏原版的全屏夜视，加上本模组的白磷效果，热像铺满整个屏幕。
+- 装了 BorkelRNVG 时：F-PANO 按它的 GPNVG-18 来画（遮罩、镜片、设置），磷光颜色固定为本模组的白磷，BorkelRNVG 的 F12 改不了这个颜色。
 
-With K-3PS-C 1.9.0 beta 1 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube. With an older K-3PS-C (1.8.2 is the last release) or without it, the F-PANO uses the game's own full-screen night vision, its white phosphor and the thermal picture laid over the whole screen.
+With K-3PS-C 1.9.0 beta 1 or later its eyepieces image the device and the thermal picture is drawn into the right inner tube. With an older K-3PS-C (1.8.2 is the last release) or without it, the F-PANO uses the game's own full-screen night vision, its white phosphor and the thermal picture laid over the whole screen. With BorkelRNVG installed, the F-PANO is drawn as its GPNVG-18 (mask, lens, settings), with the phosphor colour fixed to this mod's white phosphor.
 
 旧版本里单独的 F-PANO 支架和电池物品从 0.2.69 起不再存在：电池是 RAILINK 的一部分，支架是 F-PANO 的一部分。
 
