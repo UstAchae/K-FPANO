@@ -1770,7 +1770,10 @@ Shader "Justachae/FPANO/Outline"
                     // into trails, the user's 2026-11-27; many frames only while it holds still)
                     // (8 while it moves: the jitter runs over 8 places, and with 4 thin far things, covered by only some
                     // of them, still came and went: the user's, 0.73.28 near fine, far not)
-                    n = min(n, lerp(HeatFrames, 8.0, saturate(moved / 0.1)));
+                    // (and fewer as it moves faster: 8 while it only sways (under half a pixel a frame), down to 3 at two
+                    // pixels a frame and more, walking or turning, where 8 trailed again: the user's, 0.73.29)
+                    float frames = lerp(8.0, 3.0, saturate((moved - 0.5) / 1.5));
+                    n = min(n, lerp(HeatFrames, frames, saturate(moved / 0.1)));
                     float4 hh = heatHistoryAt(previous);
                     if (any(hh != hh))
                         return c;
