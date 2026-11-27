@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.81";
+    public const string Version = "0.2.82";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1603,6 +1603,8 @@ internal static class EnvgFusion
     private static RenderTexture? _lensTarget;
     private static int _lensJitter;
     private static bool _loggedLens, _loggedLensGrass;
+    private static Transform? _loggedLensNode;
+    private static int _lensLogs;
     private static int _loggedLensSearch; private static bool _loggedLensFound;
     private static Camera? _motionCamera;
     private static int _lensGrassDraws;
@@ -1640,6 +1642,9 @@ internal static class EnvgFusion
                 _goneMarkers.Add(t!);
                 continue;
             }
+            // (a model the game has put aside, not shown: its marker is not where the goggle is)
+            if (!t.gameObject.activeInHierarchy)
+                continue;
             float sq = (t.position - at).sqrMagnitude;
             if (sq < bestSq)
             {
@@ -1726,9 +1731,12 @@ internal static class EnvgFusion
         p.m12 += 2f * jy / h;
         drawn = p;
         cam.projectionMatrix = p;
-        if (!_loggedLens || (node != null) != _loggedLensFound)
+        // (logged again when the marker is another one, a model made anew: a few times)
+        if (!_loggedLens || (node != null) != _loggedLensFound || (node != _loggedLensNode && _lensLogs < 6))
         {
             _loggedLens = true;
+            _loggedLensNode = node;
+            _lensLogs++;
             _loggedLensFound = node != null;
             Vector3 off = eye.InverseTransformPoint(at);
             EnvgFusionPlugin.Log?.LogInfo("F-PANO thermal lens camera: " + "at the goggle's objective (" + node.name + ")"
