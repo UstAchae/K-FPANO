@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.83";
+    public const string Version = "0.2.84";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1595,7 +1595,12 @@ internal static class EnvgFusion
     // camera's pre-render, after its place for this frame is set; a sub-pixel jitter of its own (Halton 2, 3 over 8
     // frames) for the heat's history to gather. The game's instanced grass and trees are drawn for it too
     // (DrawInstancesForLens); shadows only for the physical model (the game's method reads the colour alone). ----
-    private const int LensSupersample = 2;   // the lens camera's pixels per thermal processing pixel, each way
+    // the lens camera's pixels per thermal processing pixel, each way: 3 in K-3PS-C's eyepieces, where only the thermal
+    // field's crop is drawn (thin things, a grille's bars, a pixel or two of the sensor, flickered from one frame to the
+    // next as the head sways, with no history to even them out: the user's 2026-11-27; each sensor pixel the mean of
+    // more of its own area), 2 over the whole screen
+    private static int LensSupersample => _crop.z > 0f && _crop.z < 0.999f ? 3 : 2;
+    private static int _loggedSupersample;
     private const float LensNear = 0.03f;    // the goggle's own housing around the window left out
     private static Camera? _lensCam;
     private static RenderTexture? _lensTarget;
@@ -1668,6 +1673,11 @@ internal static class EnvgFusion
             _lensCam.depthTextureMode = DepthTextureMode.Depth;
         }
         int w = Mathf.Max(width * LensSupersample, 16), h = Mathf.Max(height * LensSupersample, 16);
+        if (LensSupersample != _loggedSupersample)
+        {
+            _loggedSupersample = LensSupersample;
+            EnvgFusionPlugin.Log?.LogInfo("thermal lens camera: " + LensSupersample + " pixels per sensor pixel each way (" + w + "x" + h + ")");
+        }
         if (_lensTarget == null || _lensTarget.width != w || _lensTarget.height != h)
         {
             if (_lensTarget != null)
