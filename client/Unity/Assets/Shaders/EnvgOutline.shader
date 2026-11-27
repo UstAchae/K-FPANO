@@ -476,9 +476,7 @@ Shader "Justachae/FPANO/Outline"
     // lit as the ENVG-B's symbology: a core, and a glow falling off over glowPx outside it, gone by 4 x that
     float2 hudLight(float sd, float glowPx)
     {
-        // (the core's edge eased over a pixel and a half, not one: the symbology moves with the goggle a fraction of a
-        // pixel each frame, and strokes a pixel or two wide flickered as they fell between pixels: the user's 2026-11-27)
-        float core = saturate(sd / 1.5 + 0.5);
+        float core = saturate(sd + 0.5);
         float beyond = saturate(-sd / (4.0 * glowPx));
         return float2(core, exp(-max(-sd, 0.0) / glowPx) * (1.0 - beyond) * (1.0 - beyond) * (1.0 - core) * 0.55);
     }
@@ -1344,7 +1342,7 @@ Shader "Justachae/FPANO/Outline"
             #pragma fragment fragCopyJitter
             float4 _EnvgJitter;
             float4 _EnvgFootprint;   // xy: one sensor pixel (uv): the detector integrates over its area
-            // The thermal lens's own blur before the detector, as a real one has it: a gaussian of half a sensor pixel
+            // The thermal lens's own blur before the detector, as a real one has it: a gaussian of 0.7 of a sensor pixel
             // (sigma), taken over a sensor pixel and a half around each one. The mean over the pixel's own area alone (a
             // box) let detail finer than a pixel through, and as the head swayed a fraction of a pixel each frame (with no
             // history any more) thin lines broke into dashes running to and fro and far things shimmered (the user's,
@@ -1353,11 +1351,13 @@ Shader "Justachae/FPANO/Outline"
             {
                 float4 sum = 0;
                 float wsum = 0;
-                [unroll] for (int y = 0; y < 6; y++)
-                    [unroll] for (int x = 0; x < 6; x++)
+                [unroll] for (int y = 0; y < 7; y++)
+                    [unroll] for (int x = 0; x < 7; x++)
                     {
-                        float2 o = (float2(x, y) - 2.5) * 0.4;   // sensor pixels, -1 to 1
-                        float w = exp(-dot(o, o) / (2.0 * 0.5 * 0.5));
+                        // (sigma 0.7 of a sensor pixel, taps out to 1.5: at 0.5 thin lines still broke into dashes running
+                        // to and fro in the fused picture, whose detail boost brings out what is left, the user's video)
+                        float2 o = (float2(x, y) - 3.0) * 0.5;   // sensor pixels, -1.5 to 1.5
+                        float w = exp(-dot(o, o) / (2.0 * 0.7 * 0.7));
                         sum += w * tex2D(_MainTex, toSource(i.uv) + _EnvgJitter.xy + o * _EnvgFootprint.xy);
                         wsum += w;
                     }
@@ -1703,9 +1703,7 @@ Shader "Justachae/FPANO/Outline"
                     sd = -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0));
                     reach = i.kind - 1.0;
                 }
-                // (the core's edge eased over a pixel and a half, not one: the symbology moves with the goggle a fraction of a
-                // pixel each frame, and strokes a pixel or two wide flickered as they fell between pixels: the user's 2026-11-27)
-                float core = saturate(sd / 1.5 + 0.5);
+                float core = saturate(sd + 0.5);
                 float beyond = saturate(-sd / max(reach, 0.5));
                 float fall = exp(-max(-sd, 0.0) / max(_EnvgHudCore.w, 0.5)) * (1.0 - beyond) * (1.0 - beyond);
                 float glow = fall * (1.0 - core) * _EnvgHudGlow.a;
