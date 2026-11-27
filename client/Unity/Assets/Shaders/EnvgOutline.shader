@@ -1768,7 +1768,9 @@ Shader "Justachae/FPANO/Outline"
                     // the picture moves a fraction of a pixel every frame with K-3PS-C's eyepieces (the head sways,
                     // 0.1-0.4 px a frame), and at up to 32 frames, each fetched between pixels, the history smeared
                     // into trails, the user's 2026-11-27; many frames only while it holds still)
-                    n = min(n, lerp(HeatFrames, 4.0, saturate(moved / 0.1)));
+                    // (8 while it moves: the jitter runs over 8 places, and with 4 thin far things, covered by only some
+                    // of them, still came and went: the user's, 0.73.28 near fine, far not)
+                    n = min(n, lerp(HeatFrames, 8.0, saturate(moved / 0.1)));
                     float4 hh = heatHistoryAt(previous);
                     if (any(hh != hh))
                         return c;
