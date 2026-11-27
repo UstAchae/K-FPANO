@@ -1342,13 +1342,24 @@ Shader "Justachae/FPANO/Outline"
             #pragma fragment fragCopyJitter
             float4 _EnvgJitter;
             float4 _EnvgFootprint;   // xy: one sensor pixel (uv): the detector integrates over its area
+            // The thermal lens's own blur before the detector, as a real one has it: a gaussian of half a sensor pixel
+            // (sigma), taken over a sensor pixel and a half around each one. The mean over the pixel's own area alone (a
+            // box) let detail finer than a pixel through, and as the head swayed a fraction of a pixel each frame (with no
+            // history any more) thin lines broke into dashes running to and fro and far things shimmered (the user's,
+            // 2026-11-27); what the optics do not pass cannot alias.
             float4 fragCopyJitter(v2f i) : SV_Target
             {
                 float4 sum = 0;
-                [unroll] for (int y = 0; y < 4; y++)
-                    [unroll] for (int x = 0; x < 4; x++)
-                        sum += tex2D(_MainTex, toSource(i.uv) + _EnvgJitter.xy + (float2(x, y) - 1.5) * 0.25 * _EnvgFootprint.xy);
-                return sum / 16.0;
+                float wsum = 0;
+                [unroll] for (int y = 0; y < 6; y++)
+                    [unroll] for (int x = 0; x < 6; x++)
+                    {
+                        float2 o = (float2(x, y) - 2.5) * 0.4;   // sensor pixels, -1 to 1
+                        float w = exp(-dot(o, o) / (2.0 * 0.5 * 0.5));
+                        sum += w * tex2D(_MainTex, toSource(i.uv) + _EnvgJitter.xy + o * _EnvgFootprint.xy);
+                        wsum += w;
+                    }
+                return sum / wsum;
             }
             ENDCG
         }
