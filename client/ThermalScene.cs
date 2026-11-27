@@ -28,14 +28,19 @@ internal static class ThermalScene
         public Mesh Mesh;
         public EFT.Interactive.WindowBreaker? Breaker;
     }
-    internal static readonly List<Renderer> Decals = new List<Renderer>();
+    internal struct Decal
+    {
+        public Renderer Renderer;
+        public Bounds Bounds;   // as its level scene loaded (the levels' decals do not move)
+    }
+    internal static readonly List<Decal> Decals = new List<Decal>();
     internal static readonly List<Part> Glass = new List<Part>();
     internal static System.Action<string>? Note;
     private static readonly List<Renderer> _hidden = new List<Renderer>();
     private static readonly List<Renderer> _found = new List<Renderer>();
     private static readonly List<Material> _materials = new List<Material>();
     private static bool _hooked, _gone;
-    private static readonly System.Predicate<Renderer> DecalGone = r => r == null;
+    private static readonly System.Predicate<Decal> DecalGone = d => d.Renderer == null;
     private static readonly System.Predicate<Part> GlassGone = p => p.Renderer == null;
 
     internal static void Hook()
@@ -102,7 +107,7 @@ internal static class ThermalScene
                     }
                     if (allDecal)
                     {
-                        Decals.Add(r);
+                        Decals.Add(new Decal { Renderer = r, Bounds = r.bounds });
                         decals++;
                     }
                 }
@@ -118,18 +123,27 @@ internal static class ThermalScene
             Note?.Invoke("thermal scene " + scene.name + ": " + decals + " decal renderer(s) left out of the thermal lens's view, " + glass + " window glass part(s) drawn solid for it (" + Decals.Count + " and " + Glass.Count + " in all)");
     }
 
-    // the decals hidden for the lens camera's render (put back by ShowDecals right after it)
-    internal static int HideDecals()
+    // The decals hidden for the lens camera's render (put back by ShowDecals right after it): those whose place lies in
+    // the lens camera's view. (Not "those drawn last frame", Renderer.isVisible: a decal only the lens camera draws, on a
+    // level of detail the main camera does not show at that distance, was drawn one frame, so hidden the next, so not
+    // drawn, so shown again: on and off every other frame, 120 changes in 120 frames in the log. Far rubble's paint
+    // flickered in the thermal picture from where the two cameras chose different levels, the user's "B" flicker.)
+    private static readonly Plane[] _decalPlanes = new Plane[6];
+    internal static int HideDecals(Camera lens)
     {
         _hidden.Clear();
-        foreach (Renderer r in Decals)
+        GeometryUtility.CalculateFrustumPlanes(lens, _decalPlanes);
+        foreach (Decal d in Decals)
         {
+            if (!GeometryUtility.TestPlanesAABB(_decalPlanes, d.Bounds))
+                continue;
+            Renderer r = d.Renderer;
             if (r == null)
             {
                 _gone = true;
                 continue;
             }
-            if (!r.enabled || r.forceRenderingOff || !r.isVisible)
+            if (!r.enabled || r.forceRenderingOff)
                 continue;
             r.forceRenderingOff = true;
             _hidden.Add(r);

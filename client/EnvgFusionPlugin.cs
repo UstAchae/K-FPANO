@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.92";
+    public const string Version = "0.2.93";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -1816,7 +1816,7 @@ internal static class EnvgFusion
         float keep = QualitySettings.shadowDistance;
         QualitySettings.shadowDistance = 0f;
         // (the decals left out for this camera alone: paint on a wall is the wall's temperature)
-        int hidden = ThermalScene.HideDecals();
+        int hidden = ThermalScene.HideDecals(cam);
         try
         {
             cam.Render();
