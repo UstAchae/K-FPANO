@@ -24,7 +24,7 @@ public sealed class EnvgFusionPlugin : BaseUnityPlugin
 {
     public const string Guid = "justachae.fpanofusion";
     public const string Name = "Justachae's F-PANO Thermal Overlay";
-    public const string Version = "0.2.90";
+    public const string Version = "0.2.91";
     private const string Section = "F-PANO 热像轮廓";
     private const string Advanced = "F-PANO 热像轮廓 · 高级";
 
@@ -259,12 +259,38 @@ internal static class EnvgFusion
     // It grows at once when more is needed and shrinks only when 15 percent too large.
     private static int _cropW, _cropH;
 
+    // Over the screen (no eyepieces): the thermal field's own part of it, at the screen's centre (its half sizes as
+    // SetFieldAndParallax last set them, with the margin), not the whole screen: drawn whole it was rendered at 2 lens
+    // pixels per sensor pixel, and far rubble flickered there that did not in the eyepieces at 3 (the user's, K-3PS-C
+    // off); its size only grows, as the eyepieces' crop
+    private static Vector2 _screenHalf;
+    private static int _screenCropW, _screenCropH;
+    private static Vector4 ScreenCrop(int fullWidth, int fullHeight)
+    {
+        float share = EnvgFusionPlugin.ThermalField?.Value ?? 1f;
+        if (_screenHalf.y <= 0f || share <= 0f)
+        {
+            _screenCropW = _screenCropH = 0;
+            return new Vector4(0f, 0f, 1f, 1f);
+        }
+        float aspect = (float)fullWidth / Mathf.Max(fullHeight, 1);
+        int needW = Mathf.Min(fullWidth, Mathf.CeilToInt(2f * (_screenHalf.x + CropMargin / aspect) * fullWidth));
+        int needH = Mathf.Min(fullHeight, Mathf.CeilToInt(2f * (_screenHalf.y + CropMargin) * fullHeight));
+        if (needW > _screenCropW || _screenCropW > fullWidth)
+            _screenCropW = Mathf.Min(fullWidth, needW + 8);
+        if (needH > _screenCropH || _screenCropH > fullHeight)
+            _screenCropH = Mathf.Min(fullHeight, needH + 8);
+        int w = _screenCropW, h = _screenCropH;
+        int x = Mathf.Clamp((fullWidth - w) / 2, 0, fullWidth - w), y = Mathf.Clamp((fullHeight - h) / 2, 0, fullHeight - h);
+        return new Vector4((float)x / fullWidth, (float)y / fullHeight, (float)w / fullWidth, (float)h / fullHeight);
+    }
+
     private static Vector4 CropFor(int fullWidth, int fullHeight)
     {
         if (!EyepieceLink.ClaimedRecently || Time.frameCount - _lastFieldFrame > 2 || _lastField.z <= 0f)
         {
             _cropW = _cropH = 0;
-            return new Vector4(0f, 0f, 1f, 1f);
+            return ScreenCrop(fullWidth, fullHeight);
         }
         // this frame's eyepiece where the eyepieces have claimed it already (they set it at the camera's pre-cull, before
         // this): last frame's lagged a running wearer's bobbing eyepiece, and part of the rectangle fell outside the crop
@@ -362,6 +388,7 @@ internal static class EnvgFusion
         float field = EnvgFusionPlugin.ThermalField?.Value ?? 1f;
         // the real device's rectangle: 0.68 of the tubes' circle (the screen's height) wide, 0.52 high, times the field: half sizes in uv
         float halfH = 0.26f * field, halfW = 0.34f * field * height / Mathf.Max(width, 1);
+        _screenHalf = new Vector2(halfW, halfH);
         Material!.SetVector(FieldId, new Vector4(halfW, halfH, 4f / Mathf.Max(height, 1), field > 0f ? 1f : 0f));
         // (over the screen: at its centre, faded as the right pod swings up)
         float shown = EnvgPods.RightShown;
