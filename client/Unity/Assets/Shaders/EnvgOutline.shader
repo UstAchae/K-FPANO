@@ -1764,7 +1764,11 @@ Shader "Justachae/FPANO/Outline"
                     // (fewer frames held while the picture moves: each is fetched between pixels, and many such
                     // fetches soften it; still, all of them)
                     float moved = length((previous - i.uv) * _EnvgHistSize.zw);
-                    n = min(n, lerp(HeatFrames, 3.0, saturate(moved / 1.5)));
+                    // (a few frames only once it moves at all, as the game's TAA keeps about a fifth of each new frame:
+                    // the picture moves a fraction of a pixel every frame with K-3PS-C's eyepieces (the head sways,
+                    // 0.1-0.4 px a frame), and at up to 32 frames, each fetched between pixels, the history smeared
+                    // into trails, the user's 2026-11-27; many frames only while it holds still)
+                    n = min(n, lerp(HeatFrames, 4.0, saturate(moved / 0.1)));
                     float4 hh = heatHistoryAt(previous);
                     if (any(hh != hh))
                         return c;
@@ -1772,7 +1776,10 @@ Shader "Justachae/FPANO/Outline"
                     // still surface stays inside (and keeps being averaged); what moved off (an edge's old place, a
                     // ghost) is far outside and is cut back to what is here now
                     float4 sd = spreadAround(i.uv);
-                    return lerp(c, clamp(hh, lo - sd, hi + sd), n / (n + 1.0));
+                    // (the range widened by the spread only while it holds still: moving, old frames on a textured
+                    // wall slipped through the widened range and trailed)
+                    float4 widen = sd * (1.0 - saturate(moved / 0.1));
+                    return lerp(c, clamp(hh, lo - widen, hi + widen), n / (n + 1.0));
                 }
                 float4 hc = tex2D(_EnvgHeatHistory, previous);
                 if (any(hc != hc))
