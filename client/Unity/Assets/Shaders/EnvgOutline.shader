@@ -476,7 +476,9 @@ Shader "Justachae/FPANO/Outline"
     // lit as the ENVG-B's symbology: a core, and a glow falling off over glowPx outside it, gone by 4 x that
     float2 hudLight(float sd, float glowPx)
     {
-        float core = saturate(sd + 0.5);
+        // (the core's edge eased over a pixel and a half, not one: the symbology moves with the goggle a fraction of a
+        // pixel each frame, and strokes a pixel or two wide flickered as they fell between pixels: the user's 2026-11-27)
+        float core = saturate(sd / 1.5 + 0.5);
         float beyond = saturate(-sd / (4.0 * glowPx));
         return float2(core, exp(-max(-sd, 0.0) / glowPx) * (1.0 - beyond) * (1.0 - beyond) * (1.0 - core) * 0.55);
     }
@@ -1701,7 +1703,9 @@ Shader "Justachae/FPANO/Outline"
                     sd = -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0));
                     reach = i.kind - 1.0;
                 }
-                float core = saturate(sd + 0.5);
+                // (the core's edge eased over a pixel and a half, not one: the symbology moves with the goggle a fraction of a
+                // pixel each frame, and strokes a pixel or two wide flickered as they fell between pixels: the user's 2026-11-27)
+                float core = saturate(sd / 1.5 + 0.5);
                 float beyond = saturate(-sd / max(reach, 0.5));
                 float fall = exp(-max(-sd, 0.0) / max(_EnvgHudCore.w, 0.5)) * (1.0 - beyond) * (1.0 - beyond);
                 float glow = fall * (1.0 - core) * _EnvgHudGlow.a;
